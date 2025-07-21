@@ -30,7 +30,12 @@ logger = logging.getLogger(__name__)
 
 # Inicializar bot y Claude
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
-claude_client = Anthropic(api_key=ANTHROPIC_API_KEY)
+try:
+    claude_client = Anthropic(api_key=ANTHROPIC_API_KEY)
+    logger.info("Claude client initialized successfully")
+except Exception as e:
+    logger.error(f"Error initializing Claude client: {e}")
+    claude_client = None
 
 class MealPrepBot:
     def __init__(self):
@@ -243,6 +248,16 @@ class MealPrepBot:
     
     def modify_recipe_with_claude(self, recipe: Dict, feedback: str) -> Dict:
         """Modificar receta usando Claude basado en feedback"""
+        if claude_client is None:
+            logger.error("Claude client not available")
+            recipe["feedback"].append({
+                "date": datetime.now().isoformat(),
+                "comment": feedback,
+                "applied": False,
+                "error": "Claude client not initialized"
+            })
+            return recipe
+            
         try:
             prompt = f"""
             Receta actual: {json.dumps(recipe, ensure_ascii=False)}
@@ -291,6 +306,9 @@ class MealPrepBot:
     
     def search_or_create_recipe(self, query: str) -> str:
         """Buscar o crear receta usando Claude"""
+        if claude_client is None:
+            return "❌ Servicio de IA no disponible temporalmente. Intenta más tarde o usa /recetas para ver recetas existentes."
+            
         try:
             prompt = f"""
             El usuario busca: {query}
