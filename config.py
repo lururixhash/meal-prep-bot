@@ -1,5 +1,9 @@
 # Configuration file for the Meal Prep Bot
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (for local development)
+load_dotenv()
 
 # Telegram Bot Token - Get from @BotFather
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN', 'YOUR_TELEGRAM_BOT_TOKEN_HERE')
