@@ -11,6 +11,11 @@ TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN', 'YOUR_TELEGRAM_BOT_TOKEN_HERE')
 # Anthropic API Key - Get from console.anthropic.com
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', 'YOUR_ANTHROPIC_API_KEY_HERE')
 
+# Webhook configuration
+WEBHOOK_URL = os.getenv('WEBHOOK_URL', None)  # e.g., 'https://your-app.railway.app'
+WEBHOOK_PATH = os.getenv('WEBHOOK_PATH', f'/webhook/{TELEGRAM_TOKEN}')
+USE_WEBHOOK = os.getenv('USE_WEBHOOK', 'false').lower() == 'true'
+
 # Bot settings
 BOT_USERNAME = "meal_prep_bot"
 DATABASE_FILE = "recipes.json"

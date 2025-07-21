@@ -9,16 +9,20 @@ import json
 import os
 import re
 import logging
+import fcntl
+import atexit
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 
 import telebot
 from telebot import types
 from anthropic import Anthropic
+from flask import Flask, request
 
 from config import (
     TELEGRAM_TOKEN, ANTHROPIC_API_KEY, DATABASE_FILE, BACKUP_PREFIX,
-    DEFAULT_MACRO_TARGETS, DEFAULT_COOKING_SCHEDULE, SHOPPING_CATEGORIES
+    DEFAULT_MACRO_TARGETS, DEFAULT_COOKING_SCHEDULE, SHOPPING_CATEGORIES,
+    WEBHOOK_URL, WEBHOOK_PATH, USE_WEBHOOK
 )
 
 # Configurar logging
@@ -28,8 +32,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Inicializar bot y Claude
+# Inicializar bot y Flask
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
+app = Flask(__name__)
 try:
     claude_client = Anthropic(api_key=ANTHROPIC_API_KEY)
     logger.info("Claude client initialized successfully")
@@ -411,13 +416,13 @@ Soy tu asistente personal para meal prep con batch cooking. Te ayudo a:
 /macros - Ver resumen de macros
 /rating [receta] [1-5] [comentario] - Calificar receta
 /favorito [receta] - Marcar como favorito
-/cambiar_semana [1-4] - Cambiar semana manualmente
+/cambiar\_semana [1-4] - Cambiar semana manualmente
 
 También puedes escribirme en lenguaje natural como:
 "No me gusta el cilantro en esta receta"
 "Quiero más recetas con pollo"
 
-¡Empecemos! Usa /menu para ver tu menú actual 👨‍🍳
+¡Empecemos! Usa /menu para ver tu menú actual 👨🍳
     """
     bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
@@ -459,7 +464,7 @@ def menu_command(message):
         
         # Verificar si necesita rotación
         if meal_bot.check_rotation_needed():
-            menu_text += "\n🔄 *Es momento de rotar el menú. Usa /cambiar_semana para cambiar.*"
+            menu_text += "\n🔄 *Es momento de rotar el menú. Usa /cambiar\_semana para cambiar.*"
         
         bot.reply_to(message, menu_text, parse_mode='Markdown')
         
@@ -775,7 +780,7 @@ def change_week_command(message):
         week_str = message.text.replace('/cambiar_semana', '').strip()
         if not week_str:
             current_week = meal_bot.data["user_preferences"]["current_week"]
-            bot.reply_to(message, f"📅 Semana actual: **{current_week}**\n\nUso: `/cambiar_semana [1-4]`\n\nSemanas disponibles:\n• 1-2: Mediterráneo/Mexicano\n• 3-4: Asiático/Marroquí")
+            bot.reply_to(message, f"📅 Semana actual: **{current_week}**\n\nUso: `/cambiar\_semana [1-4]`\n\nSemanas disponibles:\n• 1-2: Mediterráneo/Mexicano\n• 3-4: Asiático/Marroquí")
             return
         
         try:
@@ -836,14 +841,113 @@ def handle_text(message):
         logger.error(f"Error en handle_text: {e}")
         bot.reply_to(message, "❌ Disculpa, ocurrió un error. Intenta usar un comando específico como /menu o /recetas.")
 
-if __name__ == '__main__':
-    logger.info("Iniciando Meal Prep Bot...")
-    
+# ===== WEBHOOK CONFIGURATION =====
+
+def setup_webhook():
+    """Configura el webhook para producción"""
+    try:
+        # Limpiar webhooks existentes
+        bot.delete_webhook()
+        logger.info("Webhooks existentes eliminados")
+        
+        if WEBHOOK_URL and USE_WEBHOOK:
+            webhook_url = f"{WEBHOOK_URL}{WEBHOOK_PATH}"
+            bot.set_webhook(url=webhook_url)
+            logger.info(f"Webhook configurado: {webhook_url}")
+            return True
+        else:
+            logger.info("Configuración de webhook no encontrada, usando polling")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error configurando webhook: {e}")
+        return False
+
+@app.route(WEBHOOK_PATH, methods=['POST'])
+def webhook():
+    """Endpoint para recibir actualizaciones de Telegram"""
+    try:
+        json_string = request.get_data(as_text=True)
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return 'OK', 200
+    except Exception as e:
+        logger.error(f"Error procesando webhook: {e}")
+        return 'Error', 500
+
+@app.route('/health')
+def health_check():
+    """Endpoint de health check"""
+    return 'Bot is running!', 200
+
+def acquire_lock():
+    """Adquiere un lock para prevenir múltiples instancias del bot"""
+    try:
+        lockfile = open('/tmp/meal_prep_bot.lock', 'w')
+        fcntl.flock(lockfile.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lockfile.write(str(os.getpid()))
+        lockfile.flush()
+        
+        def cleanup():
+            try:
+                fcntl.flock(lockfile.fileno(), fcntl.LOCK_UN)
+                lockfile.close()
+                os.remove('/tmp/meal_prep_bot.lock')
+            except:
+                pass
+        
+        atexit.register(cleanup)
+        return True
+        
+    except (IOError, OSError):
+        return False
+
+def start_bot():
+    """Inicia el bot en modo webhook o polling según la configuración"""
     # Verificar rotación automática al inicio
     if meal_bot.check_rotation_needed():
         new_week = meal_bot.rotate_menu()
         meal_bot.save_data()
         logger.info(f"Rotación automática: cambiado a semana {new_week}")
     
-    # Iniciar bot
-    bot.infinity_polling()
+    # Configurar webhook o polling
+    if USE_WEBHOOK and WEBHOOK_URL:
+        logger.info("Iniciando en modo webhook...")
+        if setup_webhook():
+            # Ejecutar Flask app
+            port = int(os.getenv('PORT', 5000))
+            app.run(host='0.0.0.0', port=port, debug=False)
+        else:
+            logger.error("Error configurando webhook, cerrando...")
+            exit(1)
+    else:
+        logger.info("Iniciando en modo polling...")
+        try:
+            # Limpiar webhooks existentes antes de empezar polling
+            bot.delete_webhook()
+            bot.infinity_polling()
+        except telebot.apihelper.ApiTelegramException as e:
+            if "409" in str(e):
+                logger.error("Error 409: Múltiples instancias detectadas. Intentando limpiar...")
+                try:
+                    bot.delete_webhook()
+                    logger.info("Webhook eliminado, reintentando polling...")
+                    bot.infinity_polling()
+                except Exception as retry_e:
+                    logger.error(f"Error en retry: {retry_e}")
+                    exit(1)
+            else:
+                logger.error(f"Error de API Telegram: {e}")
+                exit(1)
+        except Exception as e:
+            logger.error(f"Error en polling: {e}")
+            exit(1)
+
+if __name__ == '__main__':
+    # Prevenir múltiples instancias solo en modo polling
+    if not USE_WEBHOOK and not acquire_lock():
+        logger.error("Ya existe otra instancia del bot ejecutándose. Cerrando...")
+        exit(1)
+    
+    logger.info("Iniciando Meal Prep Bot...")
+    start_bot()
