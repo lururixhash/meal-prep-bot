@@ -22,7 +22,8 @@ from flask import Flask, request
 from config import (
     TELEGRAM_TOKEN, ANTHROPIC_API_KEY, DATABASE_FILE, BACKUP_PREFIX,
     DEFAULT_MACRO_TARGETS, DEFAULT_COOKING_SCHEDULE, SHOPPING_CATEGORIES,
-    WEBHOOK_URL, WEBHOOK_PATH, USE_WEBHOOK
+    WEBHOOK_URL, WEBHOOK_PATH, USE_WEBHOOK, ACTIVITY_FACTORS, PHYSICAL_WORK_BONUS,
+    MACRO_DISTRIBUTIONS, CALORIC_ADJUSTMENTS, VALIDATION_RANGES
 )
 
 # Configurar logging
@@ -389,8 +390,129 @@ class MealPrepBot:
         
         return new_week
 
+    # ===== MACRO CALCULATION FUNCTIONS =====
+    
+    def validate_user_data(self, data_type: str, value: float) -> bool:
+        """Validar datos del usuario dentro de rangos realistas"""
+        if data_type not in VALIDATION_RANGES:
+            return True
+        
+        min_val, max_val = VALIDATION_RANGES[data_type]
+        return min_val <= value <= max_val
+    
+    def calculate_bmr(self, peso: float, altura: float, edad: int, sexo: str) -> float:
+        """Calcular Metabolismo Basal usando fórmula Mifflin-St Jeor (más precisa)"""
+        if sexo.upper() in ['M', 'MASCULINO', 'HOMBRE']:
+            # Hombres: BMR = 10 × peso + 6.25 × altura - 5 × edad + 5
+            bmr = (10 * peso) + (6.25 * altura) - (5 * edad) + 5
+        else:
+            # Mujeres: BMR = 10 × peso + 6.25 × altura - 5 × edad - 161
+            bmr = (10 * peso) + (6.25 * altura) - (5 * edad) - 161
+        
+        return max(bmr, 1000)  # Mínimo 1000 kcal por seguridad
+    
+    def calculate_tdee(self, bmr: float, actividad: str, trabajo_fisico: str) -> float:
+        """Calcular Gasto Energético Total Diario"""
+        # Factor de actividad
+        activity_multiplier = ACTIVITY_FACTORS.get(actividad, 1.2)
+        tdee = bmr * activity_multiplier
+        
+        # Bonus por trabajo físico
+        work_bonus = PHYSICAL_WORK_BONUS.get(trabajo_fisico, 0)
+        tdee += work_bonus
+        
+        return tdee
+    
+    def calculate_target_calories(self, tdee: float, objetivo: str) -> int:
+        """Calcular calorías objetivo según la meta"""
+        adjustment = CALORIC_ADJUSTMENTS.get(objetivo, 0.0)
+        target_calories = tdee * (1 + adjustment)
+        return round(target_calories)
+    
+    def calculate_macros(self, target_calories: int, objetivo: str) -> dict:
+        """Calcular distribución de macronutrientes"""
+        distribution = MACRO_DISTRIBUTIONS.get(objetivo, MACRO_DISTRIBUTIONS["mantener"])
+        
+        # Calcular gramos de cada macro
+        protein_calories = target_calories * distribution["protein"]
+        carbs_calories = target_calories * distribution["carbs"]
+        fat_calories = target_calories * distribution["fat"]
+        
+        # Convertir a gramos (proteína y carbos = 4 kcal/g, grasa = 9 kcal/g)
+        macros = {
+            "calories": target_calories,
+            "protein": round(protein_calories / 4),
+            "carbs": round(carbs_calories / 4),
+            "fat": round(fat_calories / 9)
+        }
+        
+        return macros
+    
+    def save_user_profile(self, perfil: dict):
+        """Guardar perfil de usuario y actualizar macro targets"""
+        # Actualizar perfil en user_preferences
+        if "user_profile" not in self.data["user_preferences"]:
+            self.data["user_preferences"]["user_profile"] = {}
+        
+        self.data["user_preferences"]["user_profile"] = perfil
+        
+        # Actualizar macro_targets con los valores calculados
+        macros = perfil["macros_calculados"]
+        self.data["user_preferences"]["macro_targets"] = {
+            "protein": macros["protein"],
+            "carbs": macros["carbs"],
+            "fat": macros["fat"],
+            "calories": macros["calories"]
+        }
+        
+        self.save_data()
+    
+    def get_user_profile(self) -> dict:
+        """Obtener perfil de usuario guardado"""
+        return self.data["user_preferences"].get("user_profile", None)
+    
+    def calculate_complete_profile(self, peso: float, altura: float, edad: int, 
+                                 sexo: str, objetivo: str, actividad: str, 
+                                 trabajo_fisico: str) -> dict:
+        """Calcular perfil completo con macros"""
+        # Calcular BMR
+        bmr = self.calculate_bmr(peso, altura, edad, sexo)
+        
+        # Calcular TDEE  
+        tdee = self.calculate_tdee(bmr, actividad, trabajo_fisico)
+        
+        # Calcular calorías objetivo
+        target_calories = self.calculate_target_calories(tdee, objetivo)
+        
+        # Calcular macros
+        macros = self.calculate_macros(target_calories, objetivo)
+        
+        # Calcular IMC
+        altura_m = altura / 100  # convertir cm a metros
+        imc = peso / (altura_m ** 2)
+        
+        perfil = {
+            "peso": peso,
+            "altura": altura,
+            "edad": edad,
+            "sexo": sexo,
+            "objetivo": objetivo,
+            "actividad": actividad,
+            "trabajo_fisico": trabajo_fisico,
+            "imc": round(imc, 1),
+            "bmr": round(bmr),
+            "tdee": round(tdee),
+            "macros_calculados": macros,
+            "fecha_actualizacion": datetime.now().isoformat()
+        }
+        
+        return perfil
+
 # Instanciar el bot
 meal_bot = MealPrepBot()
+
+# Variables para gestionar conversaciones de perfil
+profile_conversations = {}
 
 # Manejadores de comandos
 @bot.message_handler(commands=['start'])
@@ -408,6 +530,8 @@ Soy tu asistente personal para meal prep con batch cooking. Te ayudo a:
 🤖 Modificar recetas basado en tu feedback
 
 **Comandos disponibles:**
+/perfil - Crear tu perfil personalizado
+/mis\_macros - Ver tus macros calculados
 /menu - Ver menú de la semana actual
 /recetas - Ver todas las recetas
 /buscar [consulta] - Buscar o crear recetas con IA
@@ -416,6 +540,7 @@ Soy tu asistente personal para meal prep con batch cooking. Te ayudo a:
 /macros - Ver resumen de macros
 /rating [receta] [1-5] [comentario] - Calificar receta
 /favorito [receta] - Marcar como favorito
+/actualizar\_peso [kg] - Actualizar tu peso
 /cambiar\_semana [1-4] - Cambiar semana manualmente
 
 También puedes escribirme en lenguaje natural como:
@@ -626,10 +751,19 @@ def schedule_command(message):
 def macros_command(message):
     """Mostrar resumen de macros"""
     try:
+        # Verificar si hay perfil personalizado
+        profile = meal_bot.get_user_profile()
+        
         macros = meal_bot.calculate_daily_macros()
         targets = meal_bot.data["user_preferences"]["macro_targets"]
         
         macros_text = "📊 **RESUMEN DE MACROS DIARIOS**\n\n"
+        
+        # Si hay perfil, mostrar información personalizada
+        if profile:
+            macros_text += f"👤 **Perfil personalizado activo**\n"
+            macros_text += f"• Objetivo: {profile['objetivo'].replace('_', ' ').title()}\n"
+            macros_text += f"• IMC: {profile['imc']}\n\n"
         
         # Calcular porcentajes
         protein_pct = (macros["protein"] / targets["protein"]) * 100
@@ -661,6 +795,12 @@ def macros_command(message):
         macros_text += "✅ Objetivo alcanzado (90-110%)\n"
         macros_text += "⚠️ Cerca del objetivo (80-89%, 111-120%)\n" 
         macros_text += "❌ Lejos del objetivo (<80%, >120%)\n"
+        
+        # Si no hay perfil, promocionar sistema personalizado
+        if not profile:
+            macros_text += "\n💡 **¿Quieres macros más precisos?**\n"
+            macros_text += "Usa /perfil para crear tu perfil personalizado\n"
+            macros_text += "basado en tu peso, altura, objetivo y actividad física"
         
         bot.reply_to(message, macros_text, parse_mode='Markdown')
         
@@ -810,12 +950,393 @@ def change_week_command(message):
         logger.error(f"Error en change_week_command: {e}")
         bot.reply_to(message, "❌ Error al cambiar semana. Intenta de nuevo.")
 
+# ===== FUNCIONES DE CONVERSACIÓN DE PERFIL =====
+
+def handle_profile_conversation(message):
+    """Manejar conversación paso a paso para crear perfil"""
+    user_id = message.from_user.id
+    conversation = profile_conversations[user_id]
+    state = conversation["state"]
+    data = conversation["data"]
+    text = message.text.strip()
+    
+    try:
+        if state == "confirm_update":
+            if text.lower() in ['actualizar', 'sí', 'si', 'yes', 'y']:
+                conversation["state"] = "peso"
+                bot.reply_to(message, 
+                    "👤 **Actualizando perfil completo**\n\n"
+                    "📝 **Paso 1/7: Peso**\n"
+                    "¿Cuánto pesas? (en kg)\n\n"
+                    "💡 *Ejemplo: 70 o 70.5*", 
+                    parse_mode='Markdown')
+            elif text.lower() in ['mantener', 'no', 'n']:
+                del profile_conversations[user_id]
+                bot.reply_to(message, "✅ Perfil mantenido. Usa /mis\\_macros para ver tus datos actuales.", parse_mode='Markdown')
+            else:
+                bot.reply_to(message, "💡 Responde 'actualizar' o 'mantener'")
+            return
+            
+        elif state == "peso":
+            try:
+                peso = float(text)
+                if not meal_bot.validate_user_data("peso", peso):
+                    bot.reply_to(message, "❌ El peso debe estar entre 30 y 300 kg. Intenta de nuevo:")
+                    return
+                data["peso"] = peso
+                conversation["state"] = "altura"
+                bot.reply_to(message, 
+                    "✅ Peso registrado\n\n"
+                    "📝 **Paso 2/7: Altura**\n"
+                    "¿Cuánto mides? (en cm)\n\n"
+                    "💡 *Ejemplo: 175*", 
+                    parse_mode='Markdown')
+            except ValueError:
+                bot.reply_to(message, "❌ Por favor ingresa solo el número (ej: 70)")
+            return
+            
+        elif state == "altura":
+            try:
+                altura = float(text)
+                if not meal_bot.validate_user_data("altura", altura):
+                    bot.reply_to(message, "❌ La altura debe estar entre 120 y 220 cm. Intenta de nuevo:")
+                    return
+                data["altura"] = altura
+                conversation["state"] = "edad"
+                bot.reply_to(message, 
+                    "✅ Altura registrada\n\n"
+                    "📝 **Paso 3/7: Edad**\n"
+                    "¿Cuántos años tienes?\n\n"
+                    "💡 *Ejemplo: 25*", 
+                    parse_mode='Markdown')
+            except ValueError:
+                bot.reply_to(message, "❌ Por favor ingresa solo el número (ej: 175)")
+            return
+            
+        elif state == "edad":
+            try:
+                edad = int(text)
+                if not meal_bot.validate_user_data("edad", edad):
+                    bot.reply_to(message, "❌ La edad debe estar entre 15 y 100 años. Intenta de nuevo:")
+                    return
+                data["edad"] = edad
+                conversation["state"] = "sexo"
+                bot.reply_to(message, 
+                    "✅ Edad registrada\n\n"
+                    "📝 **Paso 4/7: Sexo**\n"
+                    "¿Cuál es tu sexo?\n\n"
+                    "💡 *Responde: 'M' o 'Masculino' o 'F' o 'Femenino'*", 
+                    parse_mode='Markdown')
+            except ValueError:
+                bot.reply_to(message, "❌ Por favor ingresa solo el número (ej: 25)")
+            return
+            
+        elif state == "sexo":
+            sexo_input = text.lower()
+            if sexo_input in ['m', 'masculino', 'hombre', 'male']:
+                data["sexo"] = "M"
+            elif sexo_input in ['f', 'femenino', 'mujer', 'female']:
+                data["sexo"] = "F"
+            else:
+                bot.reply_to(message, "❌ Responde 'M' (masculino) o 'F' (femenino)")
+                return
+            
+            conversation["state"] = "objetivo"
+            bot.reply_to(message, 
+                "✅ Sexo registrado\n\n"
+                "📝 **Paso 5/7: Objetivo**\n"
+                "¿Cuál es tu objetivo principal?\n\n"
+                "💡 **Opciones:**\n"
+                "• 1 - Bajar grasa\n"
+                "• 2 - Subir masa muscular\n"
+                "• 3 - Mantener peso actual\n\n"
+                "*Responde con el número (1, 2 o 3)*", 
+                parse_mode='Markdown')
+            return
+            
+        elif state == "objetivo":
+            objetivo_map = {
+                "1": "bajar_grasa",
+                "2": "subir_masa", 
+                "3": "mantener"
+            }
+            
+            if text in objetivo_map:
+                data["objetivo"] = objetivo_map[text]
+                conversation["state"] = "actividad"
+                bot.reply_to(message, 
+                    "✅ Objetivo registrado\n\n"
+                    "📝 **Paso 6/7: Actividad Física**\n"
+                    "¿Cuál es tu nivel de actividad?\n\n"
+                    "💡 **Opciones:**\n"
+                    "• 1 - Sedentario (poco o nada de ejercicio)\n"
+                    "• 2 - Ligero (1-3 días de ejercicio/semana)\n"
+                    "• 3 - Moderado (3-5 días/semana)\n"
+                    "• 4 - Intenso (6-7 días/semana)\n"
+                    "• 5 - Atlético (2+ veces al día)\n\n"
+                    "*Responde con el número (1-5)*", 
+                    parse_mode='Markdown')
+            else:
+                bot.reply_to(message, "❌ Responde con 1, 2 o 3")
+            return
+            
+        elif state == "actividad":
+            actividad_map = {
+                "1": "sedentario",
+                "2": "ligero",
+                "3": "moderado",
+                "4": "intenso", 
+                "5": "atletico"
+            }
+            
+            if text in actividad_map:
+                data["actividad"] = actividad_map[text]
+                conversation["state"] = "trabajo"
+                bot.reply_to(message, 
+                    "✅ Actividad registrada\n\n"
+                    "📝 **Paso 7/7: Trabajo Físico**\n"
+                    "¿Tu trabajo requiere esfuerzo físico?\n\n"
+                    "💡 **Opciones:**\n"
+                    "• 1 - Oficina (sentado/computadora)\n"
+                    "• 2 - Ligero (de pie, caminar ocasional)\n"
+                    "• 3 - Moderado (carga ligera, movimiento)\n"
+                    "• 4 - Pesado (construcción, carga pesada)\n\n"
+                    "*Responde con el número (1-4)*", 
+                    parse_mode='Markdown')
+            else:
+                bot.reply_to(message, "❌ Responde con un número del 1 al 5")
+            return
+            
+        elif state == "trabajo":
+            trabajo_map = {
+                "1": "oficina",
+                "2": "ligero",
+                "3": "moderado",
+                "4": "pesado"
+            }
+            
+            if text in trabajo_map:
+                data["trabajo_fisico"] = trabajo_map[text]
+                
+                # Calcular perfil completo
+                perfil = meal_bot.calculate_complete_profile(
+                    data["peso"], data["altura"], data["edad"], 
+                    data["sexo"], data["objetivo"], data["actividad"], 
+                    data["trabajo_fisico"]
+                )
+                
+                # Guardar perfil
+                meal_bot.save_user_profile(perfil)
+                
+                # Limpiar conversación
+                del profile_conversations[user_id]
+                
+                # Mostrar resultados
+                macros = perfil["macros_calculados"]
+                
+                # Interpretar IMC
+                imc = perfil["imc"]
+                if imc < 18.5:
+                    imc_status = "Bajo peso"
+                elif imc < 25:
+                    imc_status = "Normal"
+                elif imc < 30:
+                    imc_status = "Sobrepeso"
+                else:
+                    imc_status = "Obesidad"
+                
+                response_text = "🎉 **¡Perfil creado exitosamente!**\n\n"
+                
+                response_text += "📊 **Tu perfil:**\n"
+                response_text += f"• IMC: **{perfil['imc']}** ({imc_status})\n"
+                response_text += f"• BMR: {perfil['bmr']} kcal/día\n"
+                response_text += f"• TDEE: {perfil['tdee']} kcal/día\n"
+                response_text += f"• Objetivo: {perfil['objetivo'].replace('_', ' ').title()}\n\n"
+                
+                response_text += "🔥 **Calorías objetivo:** " + f"**{macros['calories']} kcal/día**\n\n"
+                
+                response_text += "📈 **Tus macros diarios:**\n"
+                response_text += f"• 🥩 Proteína: **{macros['protein']}g**\n"
+                response_text += f"• 🍞 Carbohidratos: **{macros['carbs']}g**\n"
+                response_text += f"• 🥑 Grasas: **{macros['fat']}g**\n\n"
+                
+                response_text += "✅ *Estos macros ya están integrados en tu menú*\n\n"
+                response_text += "💡 **Comandos útiles:**\n"
+                response_text += "• /mis\\_macros - Ver macros detallados\n"
+                response_text += "• /actualizar\\_peso - Actualizar solo peso\n"
+                response_text += "• /menu - Ver tu menú personalizado"
+                
+                bot.reply_to(message, response_text, parse_mode='Markdown')
+                
+            else:
+                bot.reply_to(message, "❌ Responde con un número del 1 al 4")
+            return
+            
+    except Exception as e:
+        logger.error(f"Error en handle_profile_conversation: {e}")
+        del profile_conversations[user_id]
+        bot.reply_to(message, "❌ Error procesando perfil. Usa /perfil para intentar de nuevo.")
+
+# ===== COMANDOS DE PERFIL Y MACROS PERSONALIZADOS =====
+
+@bot.message_handler(commands=['perfil'])
+def profile_command(message):
+    """Crear o actualizar perfil de usuario paso a paso"""
+    user_id = message.from_user.id
+    
+    # Verificar si ya tiene perfil
+    existing_profile = meal_bot.get_user_profile()
+    if existing_profile:
+        bot.reply_to(message, 
+            f"👤 **Ya tienes un perfil creado**\n\n"
+            f"📊 IMC: {existing_profile['imc']}\n"
+            f"🎯 Objetivo: {existing_profile['objetivo'].replace('_', ' ').title()}\n"
+            f"🔥 Calorías: {existing_profile['macros_calculados']['calories']} kcal\n\n"
+            f"💡 **Opciones:**\n"
+            f"• Responde 'actualizar' para modificar tu perfil\n"
+            f"• Responde 'mantener' para conservar el actual\n"
+            f"• Usa /mis\\_macros para ver tus macros detallados", 
+            parse_mode='Markdown')
+        
+        # Configurar conversación para actualización
+        profile_conversations[user_id] = {
+            "state": "confirm_update",
+            "data": {}
+        }
+        return
+    
+    # Iniciar conversación de perfil nuevo
+    profile_conversations[user_id] = {
+        "state": "peso",
+        "data": {}
+    }
+    
+    bot.reply_to(message, 
+        "👤 **¡Vamos a crear tu perfil personalizado!**\n\n"
+        "Esto me permitirá calcular tus macros exactos según tus objetivos.\n\n"
+        "📝 **Paso 1/7: Peso**\n"
+        "¿Cuánto pesas? (en kg)\n\n"
+        "💡 *Ejemplo: 70 o 70.5*", 
+        parse_mode='Markdown')
+
+@bot.message_handler(commands=['mis_macros'])
+def my_macros_command(message):
+    """Mostrar macros calculados del usuario"""
+    profile = meal_bot.get_user_profile()
+    
+    if not profile:
+        bot.reply_to(message, 
+            "❌ **No tienes un perfil creado**\n\n"
+            "💡 Usa /perfil para crear tu perfil personalizado", 
+            parse_mode='Markdown')
+        return
+    
+    macros = profile["macros_calculados"]
+    
+    # Interpretar IMC
+    imc = profile["imc"]
+    if imc < 18.5:
+        imc_status = "Bajo peso"
+    elif imc < 25:
+        imc_status = "Normal"
+    elif imc < 30:
+        imc_status = "Sobrepeso"
+    else:
+        imc_status = "Obesidad"
+    
+    response_text = f"📊 **TUS MACROS PERSONALIZADOS**\n\n"
+    
+    response_text += f"👤 **Perfil:**\n"
+    response_text += f"• Peso: {profile['peso']} kg\n"
+    response_text += f"• Altura: {profile['altura']} cm\n"
+    response_text += f"• IMC: {profile['imc']} ({imc_status})\n"
+    response_text += f"• Objetivo: {profile['objetivo'].replace('_', ' ').title()}\n\n"
+    
+    response_text += f"🔥 **Calorías diarias:** {macros['calories']} kcal\n\n"
+    
+    response_text += f"📈 **Macronutrientes:**\n"
+    response_text += f"• 🥩 Proteína: **{macros['protein']}g**\n"
+    response_text += f"• 🍞 Carbohidratos: **{macros['carbs']}g**\n"
+    response_text += f"• 🥑 Grasas: **{macros['fat']}g**\n\n"
+    
+    response_text += f"💡 **Para actualizar:**\n"
+    response_text += f"• /perfil - Crear nuevo perfil\n"
+    response_text += f"• /actualizar\\_peso - Solo cambiar peso"
+    
+    bot.reply_to(message, response_text, parse_mode='Markdown')
+
+@bot.message_handler(commands=['actualizar_peso'])
+def update_weight_command(message):
+    """Actualizar solo el peso del usuario"""
+    profile = meal_bot.get_user_profile()
+    
+    if not profile:
+        bot.reply_to(message, 
+            "❌ **No tienes un perfil creado**\n\n"
+            "💡 Usa /perfil para crear tu perfil personalizado", 
+            parse_mode='Markdown')
+        return
+    
+    peso_str = message.text.replace('/actualizar_peso', '').strip()
+    
+    if not peso_str:
+        bot.reply_to(message, 
+            f"⚖️ **Actualizar peso**\n\n"
+            f"Peso actual: **{profile['peso']} kg**\n\n"
+            f"💡 Uso: `/actualizar\_peso 75` (nuevo peso en kg)", 
+            parse_mode='Markdown')
+        return
+    
+    try:
+        nuevo_peso = float(peso_str)
+        if not meal_bot.validate_user_data("peso", nuevo_peso):
+            bot.reply_to(message, "❌ Peso debe estar entre 30 y 300 kg")
+            return
+        
+        peso_anterior = profile['peso']
+        
+        # Recalcular perfil con nuevo peso
+        nuevo_perfil = meal_bot.calculate_complete_profile(
+            nuevo_peso, profile['altura'], profile['edad'], 
+            profile['sexo'], profile['objetivo'], profile['actividad'], 
+            profile['trabajo_fisico']
+        )
+        
+        # Guardar perfil actualizado
+        meal_bot.save_user_profile(nuevo_perfil)
+        
+        macros = nuevo_perfil["macros_calculados"]
+        
+        response_text = f"✅ **Peso actualizado exitosamente**\n\n"
+        response_text += f"⚖️ Peso anterior: {peso_anterior} kg\n"
+        response_text += f"⚖️ Peso nuevo: **{nuevo_peso} kg**\n"
+        response_text += f"📊 IMC: **{nuevo_perfil['imc']}**\n\n"
+        response_text += f"📈 **Nuevos macros:**\n"
+        response_text += f"• 🔥 Calorías: **{macros['calories']} kcal**\n"
+        response_text += f"• 🥩 Proteína: **{macros['protein']}g**\n"
+        response_text += f"• 🍞 Carbohidratos: **{macros['carbs']}g**\n"
+        response_text += f"• 🥑 Grasas: **{macros['fat']}g**"
+        
+        bot.reply_to(message, response_text, parse_mode='Markdown')
+        
+    except ValueError:
+        bot.reply_to(message, "❌ Por favor ingresa un número válido (ej: 70 o 70.5)")
+    except Exception as e:
+        logger.error(f"Error en update_weight_command: {e}")
+        bot.reply_to(message, "❌ Error al actualizar peso. Intenta de nuevo.")
+
 # Manejador de mensajes de texto libre (conversacional)
 @bot.message_handler(func=lambda message: True, content_types=['text'])
 def handle_text(message):
     """Manejar mensajes conversacionales"""
     try:
+        user_id = message.from_user.id
         text = message.text.lower()
+        
+        # Manejar conversación de perfil si está activa
+        if user_id in profile_conversations:
+            handle_profile_conversation(message)
+            return
         
         # Frases comunes de feedback
         if any(phrase in text for phrase in ["no me gusta", "muy salado", "muy seco", "quedó", "sabe"]):

@@ -48,3 +48,38 @@ SHOPPING_CATEGORIES = {
     "lacteos": ["queso", "yogurt", "leche"],
     "otros": ["aceite", "vinagre", "caldos"]
 }
+
+# Macro calculation constants
+ACTIVITY_FACTORS = {
+    "sedentario": 1.2,
+    "ligero": 1.375,
+    "moderado": 1.55,
+    "intenso": 1.725,
+    "atletico": 1.9
+}
+
+PHYSICAL_WORK_BONUS = {
+    "oficina": 0,
+    "ligero": 200,      # Trabajo de pie, caminar ocasional
+    "moderado": 400,    # Trabajo físico moderado, cargas ligeras
+    "pesado": 600       # Construcción, carga pesada, trabajo manual intenso
+}
+
+MACRO_DISTRIBUTIONS = {
+    "bajar_grasa": {"protein": 0.35, "carbs": 0.40, "fat": 0.25},
+    "subir_masa": {"protein": 0.30, "carbs": 0.45, "fat": 0.25},
+    "mantener": {"protein": 0.30, "carbs": 0.40, "fat": 0.30}
+}
+
+CALORIC_ADJUSTMENTS = {
+    "bajar_grasa": -0.15,  # -15% del TDEE
+    "subir_masa": 0.15,    # +15% del TDEE
+    "mantener": 0.0        # TDEE exacto
+}
+
+# Validation ranges
+VALIDATION_RANGES = {
+    "peso": (30, 300),      # kg
+    "altura": (120, 220),   # cm
+    "edad": (15, 100)       # años
+}
