@@ -493,6 +493,7 @@
       "objetivo": "subir_masa",
       "actividad_fisica": "moderado",
       "trabajo_fisico": "oficina",
+      "imc": 22.6,
       "macros_calculados": {
         "bmr": 1810,
         "tdee": 2805,
