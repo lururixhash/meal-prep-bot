@@ -1633,28 +1633,28 @@ def profile_command(message):
                 f"• Responde 'mantener' para conservar el actual\n"
                 f"• Usa /mis\\_macros para ver tus macros detallados", 
                 parse_mode='Markdown')
+            
+            # Configurar conversación para actualización
+            profile_conversations[user_id] = {
+                "state": "confirm_update",
+                "data": {}
+            }
+            return
         
-        # Configurar conversación para actualización
+        # Iniciar conversación de perfil nuevo
         profile_conversations[user_id] = {
-            "state": "confirm_update",
+            "state": "peso",
             "data": {}
         }
-        return
-    
-    # Iniciar conversación de perfil nuevo
-    profile_conversations[user_id] = {
-        "state": "peso",
-        "data": {}
-    }
-    
-    bot.reply_to(message, 
-        "👤 **¡Vamos a crear tu perfil personalizado!**\n\n"
-        "Esto me permitirá calcular tus macros exactos según tus objetivos.\n\n"
-        "📝 **Paso 1/7: Peso**\n"
-        "¿Cuánto pesas? (en kg)\n\n"
-        "💡 *Ejemplo: 70 o 70.5*", 
-        parse_mode='Markdown')
         
+        bot.reply_to(message, 
+            "👤 **¡Vamos a crear tu perfil personalizado!**\n\n"
+            "Esto me permitirá calcular tus macros exactos según tus objetivos.\n\n"
+            "📝 **Paso 1/7: Peso**\n"
+            "¿Cuánto pesas? (en kg)\n\n"
+            "💡 *Ejemplo: 70 o 70.5*", 
+            parse_mode='Markdown')
+            
     except Exception as e:
         logger.error(f"Error en profile_command: {e}")
         import traceback
