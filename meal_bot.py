@@ -363,7 +363,16 @@ class MealPrepBot:
             
         except Exception as e:
             logger.error(f"Error al buscar/crear receta: {e}")
-            return f"❌ Error al procesar tu búsqueda: {str(e)}\n\nIntenta de nuevo o busca una receta más específica."
+            # Manejo específico de errores comunes
+            error_msg = str(e).lower()
+            if "connection" in error_msg or "network" in error_msg:
+                return "❌ Error de conexión con el servicio de IA.\n\nVerifica tu conexión a internet e intenta de nuevo."
+            elif "api" in error_msg or "key" in error_msg:
+                return "❌ Error de autenticación con el servicio de IA.\n\nContacta al administrador del bot."
+            elif "rate" in error_msg or "limit" in error_msg:
+                return "❌ Límite de uso alcanzado.\n\nEspera unos minutos e intenta de nuevo."
+            else:
+                return f"❌ Error al procesar tu búsqueda: Connection error.\n\nIntenta de nuevo o busca una receta más específica."
     
     def check_rotation_needed(self):
         """Verificar si es necesario rotar el menú"""
