@@ -907,8 +907,14 @@ def personal_shopping_command(message):
             bot.reply_to(message, "❌ Error calculando cantidades. Intenta de nuevo.")
             return
         
-        response = "🛍️ **LISTA DE COMPRAS PERSONALIZADA**\n"
-        response += "*(Cantidades ajustadas a tus macros)*\n\n"
+        # Enviar mensaje inicial
+        initial_response = "🛍️ **LISTA DE COMPRAS PERSONALIZADA**\n"
+        initial_response += "*(Cantidades ajustadas a tus macros)*\n\n"
+        initial_response += "📊 **7 días de meal prep personalizado**\n"
+        initial_response += "📝 Lista dividida en categorías...\n"
+        
+        logger.info(f"Enviando mensaje inicial ({len(initial_response)} chars)")
+        bot.reply_to(message, initial_response, parse_mode='Markdown')
         
         # Agrupar ingredientes por categoría
         ingredients_by_category = {}
@@ -932,7 +938,7 @@ def personal_shopping_command(message):
                     if category not in ingredients_by_category:
                         ingredients_by_category[category] = []
                     
-                    # Ajustar cantidad del ingrediente
+                    # Ajustar cantidad del ingrediente (formato más compacto)
                     if multiplier != 1.0:
                         # Intentar extraer número y ajustarlo
                         import re
@@ -941,13 +947,13 @@ def personal_shopping_command(message):
                             original_amount = float(numbers[0])
                             new_amount = original_amount * multiplier
                             adjusted_ingredient = re.sub(r'\d+(?:\.\d+)?', f"{new_amount:.1f}", ingredient, count=1)
-                            ingredients_by_category[category].append(f"{adjusted_ingredient} ({recipe['name']})")
+                            ingredients_by_category[category].append(adjusted_ingredient)
                         else:
-                            ingredients_by_category[category].append(f"{ingredient} x{multiplier:.1f} ({recipe['name']})")
+                            ingredients_by_category[category].append(f"{ingredient} ×{multiplier:.1f}")
                     else:
-                        ingredients_by_category[category].append(f"{ingredient} ({recipe['name']})")
+                        ingredients_by_category[category].append(ingredient)
         
-        # Mostrar por categorías
+        # Enviar categorías por separado
         category_emojis = {
             "proteinas": "🥩",
             "legumbres": "🫘", 
@@ -958,22 +964,48 @@ def personal_shopping_command(message):
             "otros": "📋"
         }
         
+        import time
+        
         for category, ingredients in ingredients_by_category.items():
             if ingredients:
                 emoji = category_emojis.get(category, "📋")
-                response += f"{emoji} **{category.upper()}:**\n"
+                category_response = f"{emoji} **{category.upper()}:**\n"
                 for ingredient in sorted(set(ingredients)):
-                    response += f"• {ingredient}\n"
-                response += "\n"
+                    category_response += f"• {ingredient}\n"
+                
+                logger.info(f"Enviando categoría {category} ({len(category_response)} chars, {len(ingredients)} ingredientes)")
+                
+                # Verificar si el mensaje es muy largo y dividirlo si es necesario
+                if len(category_response) > 3500:
+                    logger.warning(f"Mensaje de categoría {category} muy largo ({len(category_response)} chars), dividiendo...")
+                    # Dividir en mensajes más pequeños
+                    lines = category_response.split('\n')
+                    current_message = lines[0] + '\n'  # Header de categoría
+                    
+                    for line in lines[1:]:  # Skip header
+                        if len(current_message + line + '\n') > 3500:
+                            bot.send_message(message.chat.id, current_message.strip(), parse_mode='Markdown')
+                            time.sleep(0.5)
+                            current_message = line + '\n'
+                        else:
+                            current_message += line + '\n'
+                    
+                    if current_message.strip():
+                        bot.send_message(message.chat.id, current_message.strip(), parse_mode='Markdown')
+                else:
+                    bot.send_message(message.chat.id, category_response, parse_mode='Markdown')
+                    
+                time.sleep(0.5)  # Pausa pequeña entre mensajes
         
-        response += "📝 **INSTRUCCIONES:**\n"
-        response += "1. Compra estas cantidades ajustadas\n"
-        response += "2. Usa `/divisiones` para saber cómo dividir lo cocinado\n"
-        response += "3. Cada división = 1 comida perfectamente balanceada\n\n"
+        # Mensaje final con instrucciones
+        final_response = "📝 **INSTRUCCIONES:**\n"
+        final_response += "1. Compra estas cantidades ajustadas\n"
+        final_response += "2. Usa `/divisiones` para saber cómo dividir lo cocinado\n"
+        final_response += "3. Cada división = 1 comida perfectamente balanceada\n\n"
+        final_response += "💡 *Cantidades calculadas para 7 días de meal prep*"
         
-        response += "💡 *Cantidades calculadas para 7 días de meal prep*"
-        
-        bot.reply_to(message, response, parse_mode='Markdown')
+        logger.info(f"Enviando mensaje final ({len(final_response)} chars)")
+        bot.send_message(message.chat.id, final_response, parse_mode='Markdown')
         
     except Exception as e:
         logger.error(f"Error en personal_shopping_command: {e}")
@@ -998,12 +1030,16 @@ def divisions_command(message):
             bot.reply_to(message, "❌ Error calculando divisiones. Intenta de nuevo.")
             return
         
-        response = "✂️ **CÓMO DIVIDIR TUS ALIMENTOS COCINADOS**\n\n"
-        
+        # Mensaje inicial
         total_meals = cooking_data['weekly_summary']['total_meals']
         daily_meals = cooking_data['weekly_summary']['daily_meals']
         
-        response += f"📊 **Resumen:** {total_meals} comidas para 7 días ({daily_meals} por día)\n\n"
+        initial_response = "✂️ **CÓMO DIVIDIR TUS ALIMENTOS COCINADOS**\n\n"
+        initial_response += f"📊 **Resumen:** {total_meals} comidas para 7 días ({daily_meals} por día)\n"
+        initial_response += "📝 Instrucciones por categorías...\n"
+        
+        logger.info(f"Enviando mensaje inicial divisiones ({len(initial_response)} chars)")
+        bot.reply_to(message, initial_response, parse_mode='Markdown')
         
         # Agrupar por categoría
         proteins = []
@@ -1033,7 +1069,7 @@ def divisions_command(message):
                     else:
                         bases.append(division_data)
         
-        # Mostrar instrucciones por categoría
+        # Enviar instrucciones por categoría
         categories = [
             ("🥩 **PROTEÍNAS:**", proteins),
             ("🫘 **LEGUMBRES:**", legumes), 
@@ -1041,25 +1077,31 @@ def divisions_command(message):
             ("🥬 **VEGETALES:**", vegetables)
         ]
         
+        import time
+        
         for category_title, items in categories:
             if items:
-                response += f"{category_title}\n"
+                category_response = f"{category_title}\n"
                 for item in items:
-                    response += f"• **{item['name']}:**\n"
-                    response += f"  🍲 Total cocinado: {item['total_servings']:.1f} porciones\n"
-                    response += f"  ✂️ Dividir en: **{item['divisions']} tuppers iguales**\n"
-                    response += f"  🍽️ Cada tupper: {item['portion_per_division']:.2f} porciones\n\n"
-                response += "\n"
+                    category_response += f"• **{item['name']}:**\n"
+                    category_response += f"  🍲 Total: {item['total_servings']:.1f} porciones\n"
+                    category_response += f"  ✂️ Dividir en: **{item['divisions']} tuppers**\n"
+                    category_response += f"  🍽️ Cada tupper: {item['portion_per_division']:.2f} porciones\n\n"
+                
+                logger.info(f"Enviando categoría divisiones {category_title} ({len(category_response)} chars)")
+                bot.send_message(message.chat.id, category_response, parse_mode='Markdown')
+                time.sleep(0.5)
         
-        response += "📝 **INSTRUCCIONES FINALES:**\n"
-        response += "1. Cocina todo según las recetas\n"
-        response += "2. Divide cada alimento cocinado en los tuppers indicados\n"
-        response += "3. Cada tupper = 1 comida balanceada\n"
-        response += "4. Solo calienta y come, ¡no más pesado!\n\n"
+        # Mensaje final con instrucciones
+        final_response = "📝 **INSTRUCCIONES FINALES:**\n"
+        final_response += "1. Cocina todo según las recetas\n"
+        final_response += "2. Divide cada alimento cocinado en los tuppers indicados\n"
+        final_response += "3. Cada tupper = 1 comida balanceada\n"
+        final_response += "4. Solo calienta y come, ¡no más pesado!\n\n"
+        final_response += "💡 *Perfecto para meal prep sin complicaciones*"
         
-        response += "💡 *Perfecto para meal prep sin complicaciones*"
-        
-        bot.reply_to(message, response, parse_mode='Markdown')
+        logger.info(f"Enviando mensaje final divisiones ({len(final_response)} chars)")
+        bot.send_message(message.chat.id, final_response, parse_mode='Markdown')
         
     except Exception as e:
         logger.error(f"Error en divisions_command: {e}")
