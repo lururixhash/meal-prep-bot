@@ -1614,11 +1614,15 @@ def handle_profile_conversation(message):
 @bot.message_handler(commands=['perfil'])
 def profile_command(message):
     """Crear o actualizar perfil de usuario paso a paso"""
-    user_id = message.from_user.id
-    
-    # Verificar si ya tiene perfil
-    existing_profile = meal_bot.get_user_profile()
-    if existing_profile:
+    try:
+        logger.info(f"Comando /perfil ejecutado por user_id: {message.from_user.id}")
+        user_id = message.from_user.id
+        
+        # Verificar si ya tiene perfil
+        existing_profile = meal_bot.get_user_profile()
+        logger.info(f"Perfil existente encontrado: {existing_profile is not None}")
+        
+        if existing_profile:
         bot.reply_to(message, 
             f"👤 **Ya tienes un perfil creado**\n\n"
             f"📊 IMC: {existing_profile['imc']}\n"
@@ -1650,6 +1654,12 @@ def profile_command(message):
         "¿Cuánto pesas? (en kg)\n\n"
         "💡 *Ejemplo: 70 o 70.5*", 
         parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error en profile_command: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        bot.reply_to(message, "❌ Error ejecutando comando /perfil. Intenta de nuevo.")
 
 @bot.message_handler(commands=['mis_macros'])
 def my_macros_command(message):
@@ -1821,11 +1831,25 @@ def webhook():
     """Endpoint para recibir actualizaciones de Telegram"""
     try:
         json_string = request.get_data(as_text=True)
+        logger.info(f"Webhook recibido: {json_string[:200]}...")  # Logging del payload
+        
         update = telebot.types.Update.de_json(json_string)
+        logger.info(f"Update procesado: update_id={update.update_id}")
+        
+        # Logging de mensaje si existe
+        if update.message:
+            user_id = update.message.from_user.id
+            username = update.message.from_user.username or "sin_username"
+            message_text = update.message.text or "sin_texto"
+            logger.info(f"Mensaje de @{username} (ID: {user_id}): {message_text}")
+        
         bot.process_new_updates([update])
+        logger.info("Update procesado exitosamente")
         return 'OK', 200
     except Exception as e:
         logger.error(f"Error procesando webhook: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return 'Error', 500
 
 @app.route('/health')
