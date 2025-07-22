@@ -1623,16 +1623,16 @@ def profile_command(message):
         logger.info(f"Perfil existente encontrado: {existing_profile is not None}")
         
         if existing_profile:
-        bot.reply_to(message, 
-            f"👤 **Ya tienes un perfil creado**\n\n"
-            f"📊 IMC: {existing_profile['imc']}\n"
-            f"🎯 Objetivo: {existing_profile['objetivo'].replace('_', ' ').title()}\n"
-            f"🔥 Calorías: {existing_profile['macros_calculados']['calories']} kcal\n\n"
-            f"💡 **Opciones:**\n"
-            f"• Responde 'actualizar' para modificar tu perfil\n"
-            f"• Responde 'mantener' para conservar el actual\n"
-            f"• Usa /mis\\_macros para ver tus macros detallados", 
-            parse_mode='Markdown')
+            bot.reply_to(message, 
+                f"👤 **Ya tienes un perfil creado**\n\n"
+                f"📊 IMC: {existing_profile['imc']}\n"
+                f"🎯 Objetivo: {existing_profile['objetivo'].replace('_', ' ').title()}\n"
+                f"🔥 Calorías: {existing_profile['macros_calculados']['calories']} kcal\n\n"
+                f"💡 **Opciones:**\n"
+                f"• Responde 'actualizar' para modificar tu perfil\n"
+                f"• Responde 'mantener' para conservar el actual\n"
+                f"• Usa /mis\\_macros para ver tus macros detallados", 
+                parse_mode='Markdown')
         
         # Configurar conversación para actualización
         profile_conversations[user_id] = {
