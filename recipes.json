@@ -485,11 +485,28 @@
   "user_preferences": {
     "dislikes": ["pescado", "mariscos", "cilantro"],
     "allergies": [],
+    "user_profile": {
+      "peso": 70.0,
+      "altura": 176.0,
+      "edad": 25,
+      "sexo": "masculino",
+      "objetivo": "subir_masa",
+      "actividad_fisica": "moderado",
+      "trabajo_fisico": "oficina",
+      "macros_calculados": {
+        "bmr": 1810,
+        "tdee": 2805,
+        "calories": 3446,
+        "protein": 258,
+        "carbs": 388,
+        "fat": 96
+      }
+    },
     "macro_targets": {
-      "protein": 145,
-      "carbs": 380,
-      "fat": 100,
-      "calories": 2900
+      "protein": 258,
+      "carbs": 388,
+      "fat": 96,
+      "calories": 3446
     },
     "current_week": 1,
     "cooking_schedule": {

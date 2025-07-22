@@ -480,6 +480,160 @@ class MealPrepBot:
         """Obtener perfil de usuario guardado"""
         return self.data["user_preferences"].get("user_profile", None)
     
+    def calculate_personal_portions(self, num_comidas: int = 5) -> dict:
+        """Calcular porciones personalizadas por comida basadas en macros del usuario"""
+        user_profile = self.get_user_profile()
+        if not user_profile:
+            return None
+            
+        # Obtener macros objetivo del usuario
+        target_macros = user_profile["macros_calculados"]
+        daily_protein = target_macros["protein"]
+        daily_carbs = target_macros["carbs"] 
+        daily_fat = target_macros["fat"]
+        daily_calories = target_macros["calories"]
+        
+        # Obtener recetas de semana actual (1-2)
+        week_recipes = self.data["meal_plans"]["week_1_2"]
+        
+        # Calcular macros por porción de cada categoría
+        recipes_data = {}
+        for category in ["proteins", "legumes", "base_components"]:
+            recipes_data[category] = []
+            for recipe_id in week_recipes[category]:
+                if recipe_id in self.data["recipes"]:
+                    recipe = self.data["recipes"][recipe_id]
+                    recipes_data[category].append({
+                        "id": recipe_id,
+                        "name": recipe["name"],
+                        "macros": recipe["macros_per_serving"]
+                    })
+        
+        # Distribución típica de macros por comida
+        # Proteínas: 35%, Legumbres: 25%, Bases: 40%
+        protein_from_proteins = daily_protein * 0.35
+        protein_from_legumes = daily_protein * 0.25
+        protein_from_bases = daily_protein * 0.40
+        
+        carbs_from_proteins = daily_carbs * 0.10
+        carbs_from_legumes = daily_carbs * 0.35
+        carbs_from_bases = daily_carbs * 0.55
+        
+        fat_from_proteins = daily_fat * 0.45
+        fat_from_legumes = daily_fat * 0.15
+        fat_from_bases = daily_fat * 0.40
+        
+        # Calcular porciones diarias necesarias de cada receta
+        portions_needed = {}
+        
+        # Proteínas
+        for recipe in recipes_data["proteins"]:
+            recipe_protein = recipe["macros"]["protein"]
+            # Dividir la proteína objetivo entre las 2 recetas de proteína
+            daily_portions = (protein_from_proteins / 2) / recipe_protein
+            portions_needed[recipe["id"]] = {
+                "name": recipe["name"],
+                "daily_portions": daily_portions,
+                "portions_per_meal": daily_portions / num_comidas,
+                "category": "protein"
+            }
+        
+        # Legumbres
+        for recipe in recipes_data["legumes"]:
+            recipe_protein = recipe["macros"]["protein"]
+            # Dividir la proteína objetivo entre las 2 recetas de legumbre
+            daily_portions = (protein_from_legumes / 2) / recipe_protein
+            portions_needed[recipe["id"]] = {
+                "name": recipe["name"],
+                "daily_portions": daily_portions,
+                "portions_per_meal": daily_portions / num_comidas,
+                "category": "legume"
+            }
+        
+        # Bases (carbohidratos)
+        base_recipes = [r for r in recipes_data["base_components"] if r["id"] in ["quinoa_pilaf", "brown_rice"]]
+        for recipe in base_recipes:
+            recipe_carbs = recipe["macros"]["carbs"]
+            # Dividir los carbohidratos objetivo entre las 2 recetas base
+            daily_portions = (carbs_from_bases / 2) / recipe_carbs
+            portions_needed[recipe["id"]] = {
+                "name": recipe["name"],
+                "daily_portions": daily_portions,
+                "portions_per_meal": daily_portions / num_comidas,
+                "category": "base"
+            }
+        
+        # Vegetales (cantidad fija)
+        portions_needed["roasted_vegetables"] = {
+            "name": "Vegetales Asados Mixtos",
+            "daily_portions": 2.0,  # 2 porciones de vegetales al día
+            "portions_per_meal": 2.0 / num_comidas,
+            "category": "vegetable"
+        }
+        
+        return {
+            "portions_needed": portions_needed,
+            "daily_macros": {
+                "protein": daily_protein,
+                "carbs": daily_carbs,
+                "fat": daily_fat,
+                "calories": daily_calories
+            },
+            "num_comidas": num_comidas
+        }
+    
+    def calculate_cooking_amounts(self) -> dict:
+        """Calcular cantidades de cocina y divisiones basadas en porciones personalizadas"""
+        portions_data = self.calculate_personal_portions()
+        if not portions_data:
+            return None
+            
+        cooking_amounts = {}
+        divisions = {}
+        
+        # Calcular cantidades semanales (7 días)
+        for recipe_id, portion_info in portions_data['portions_needed'].items():
+            daily_portions = portion_info['daily_portions']
+            weekly_portions = daily_portions * 7  # 7 días de la semana
+            
+            # Obtener receta original
+            if recipe_id in self.data["recipes"]:
+                recipe = self.data["recipes"][recipe_id]
+                original_servings = recipe["servings"]
+                
+                # Calcular cuántas "recetas completas" necesitamos hacer
+                recipe_multiplier = weekly_portions / original_servings
+                
+                cooking_amounts[recipe_id] = {
+                    "name": recipe["name"],
+                    "original_servings": original_servings,
+                    "weekly_portions_needed": weekly_portions,
+                    "recipe_multiplier": recipe_multiplier,
+                    "daily_portions": daily_portions,
+                    "portions_per_meal": portion_info['portions_per_meal']
+                }
+                
+                # Cálculo de divisiones
+                # Si cocinamos 1x la receta (8 porciones), ¿en cuántas divisiones la partimos?
+                total_cooked_servings = original_servings * recipe_multiplier
+                divisions_needed = portions_data['num_comidas'] * 7  # 5 comidas x 7 días
+                
+                divisions[recipe_id] = {
+                    "name": recipe["name"],
+                    "total_cooked_servings": total_cooked_servings,
+                    "divisions_needed": int(divisions_needed),
+                    "portion_per_division": portion_info['portions_per_meal']
+                }
+        
+        return {
+            "cooking_amounts": cooking_amounts,
+            "divisions": divisions,
+            "weekly_summary": {
+                "total_meals": portions_data['num_comidas'] * 7,
+                "daily_meals": portions_data['num_comidas']
+            }
+        }
+    
     def calculate_complete_profile(self, peso: float, altura: float, edad: int, 
                                  sexo: str, objetivo: str, actividad: str, 
                                  trabajo_fisico: str) -> dict:
@@ -544,7 +698,14 @@ Soy tu asistente personal para meal prep con batch cooking. Te ayudo a:
 /menu - Ver menú de la semana actual
 /recetas - Ver todas las recetas
 /buscar [consulta] - Buscar o crear recetas con IA
-/compras - Generar lista de compra
+
+**🎯 MEAL PREP PERSONALIZADO:**
+/meal\_prep - Calcular porciones por comida
+/compras\_personales - Lista ajustada a tus macros
+/divisiones - Cómo dividir alimentos cocinados
+
+**📊 GESTIÓN:**
+/compras - Lista de compra estándar
 /cronograma - Ver cronograma de cocción
 /macros - Ver resumen de macros
 /rating [receta] [1-5] [comentario] - Calificar receta
@@ -641,6 +802,268 @@ def recipes_command(message):
     except Exception as e:
         logger.error(f"Error en recipes_command: {e}")
         bot.reply_to(message, "❌ Error al mostrar recetas. Intenta de nuevo.")
+
+@bot.message_handler(commands=['porciones_personales', 'meal_prep'])
+def personal_portions_command(message):
+    """Calcular porciones personalizadas por comida"""
+    try:
+        # Verificar si el usuario tiene perfil configurado
+        user_profile = meal_bot.get_user_profile()
+        if not user_profile:
+            bot.reply_to(message, 
+                "❌ **Perfil no configurado**\n\n"
+                "Para calcular porciones personalizadas necesitas configurar tu perfil:\n\n"
+                "`/perfil` - Crear perfil completo\n\n"
+                "💡 *El perfil incluye peso, altura, objetivo y actividad física*",
+                parse_mode='Markdown')
+            return
+        
+        # Calcular porciones personalizadas
+        portions_data = meal_bot.calculate_personal_portions()
+        if not portions_data:
+            bot.reply_to(message, "❌ Error calculando porciones. Intenta de nuevo.")
+            return
+        
+        # Construir mensaje de respuesta
+        response = "🍽️ **MEAL PREP PERSONALIZADO**\n\n"
+        response += f"📊 **Tus Macros Diarios:**\n"
+        response += f"• Calorías: {portions_data['daily_macros']['calories']} kcal\n"
+        response += f"• Proteína: {portions_data['daily_macros']['protein']}g\n"
+        response += f"• Carbohidratos: {portions_data['daily_macros']['carbs']}g\n"
+        response += f"• Grasas: {portions_data['daily_macros']['fat']}g\n\n"
+        
+        response += f"🔢 **Distribuido en {portions_data['num_comidas']} comidas diarias**\n\n"
+        
+        # Agrupar por categorías
+        proteins = []
+        legumes = []
+        bases = []
+        vegetables = []
+        
+        for recipe_id, data in portions_data['portions_needed'].items():
+            if data['category'] == 'protein':
+                proteins.append((recipe_id, data))
+            elif data['category'] == 'legume':
+                legumes.append((recipe_id, data))
+            elif data['category'] == 'base':
+                bases.append((recipe_id, data))
+            elif data['category'] == 'vegetable':
+                vegetables.append((recipe_id, data))
+        
+        # Mostrar porciones por categoría
+        if proteins:
+            response += "🥩 **PROTEÍNAS (por comida):**\n"
+            for recipe_id, data in proteins:
+                response += f"• {data['name']}: {data['portions_per_meal']:.2f} porciones\n"
+            response += "\n"
+        
+        if legumes:
+            response += "🫘 **LEGUMBRES (por comida):**\n"
+            for recipe_id, data in legumes:
+                response += f"• {data['name']}: {data['portions_per_meal']:.2f} porciones\n"
+            response += "\n"
+        
+        if bases:
+            response += "🌾 **BASES (por comida):**\n"
+            for recipe_id, data in bases:
+                response += f"• {data['name']}: {data['portions_per_meal']:.2f} porciones\n"
+            response += "\n"
+        
+        if vegetables:
+            response += "🥬 **VEGETALES (por comida):**\n"
+            for recipe_id, data in vegetables:
+                response += f"• {data['name']}: {data['portions_per_meal']:.2f} porciones\n"
+            response += "\n"
+        
+        response += "📝 **PARA MEAL PREP:**\n"
+        response += "1. Cocina las cantidades del `/compras`\n"
+        response += "2. Divide cada receta cocinada según las porciones calculadas\n"
+        response += "3. Guarda en tuppers individuales por comida\n\n"
+        
+        response += "💡 *Usa `/compras_personales` para lista de compras ajustada*"
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error en personal_portions_command: {e}")
+        bot.reply_to(message, "❌ Error calculando porciones personalizadas. Intenta de nuevo.")
+
+@bot.message_handler(commands=['compras_personales'])
+def personal_shopping_command(message):
+    """Generar lista de compras ajustada a macros personalizados"""
+    try:
+        # Verificar perfil
+        user_profile = meal_bot.get_user_profile()
+        if not user_profile:
+            bot.reply_to(message, 
+                "❌ **Perfil no configurado**\n\n"
+                "Usa `/perfil` para configurar tu perfil primero.",
+                parse_mode='Markdown')
+            return
+        
+        # Calcular cantidades de cocina
+        cooking_data = meal_bot.calculate_cooking_amounts()
+        if not cooking_data:
+            bot.reply_to(message, "❌ Error calculando cantidades. Intenta de nuevo.")
+            return
+        
+        response = "🛍️ **LISTA DE COMPRAS PERSONALIZADA**\n"
+        response += "*(Cantidades ajustadas a tus macros)*\n\n"
+        
+        # Agrupar ingredientes por categoría
+        ingredients_by_category = {}
+        
+        for recipe_id, amounts in cooking_data['cooking_amounts'].items():
+            if recipe_id in meal_bot.data["recipes"]:
+                recipe = meal_bot.data["recipes"][recipe_id]
+                multiplier = amounts['recipe_multiplier']
+                
+                # Procesar ingredientes
+                for ingredient in recipe["ingredients"]:
+                    # Detectar categoria del ingrediente
+                    category = "otros"
+                    ingredient_lower = ingredient.lower()
+                    
+                    for cat, items in meal_bot.data.get("shopping_categories", {}).items():
+                        if any(item in ingredient_lower for item in items):
+                            category = cat
+                            break
+                    
+                    if category not in ingredients_by_category:
+                        ingredients_by_category[category] = []
+                    
+                    # Ajustar cantidad del ingrediente
+                    if multiplier != 1.0:
+                        # Intentar extraer número y ajustarlo
+                        import re
+                        numbers = re.findall(r'\d+(?:\.\d+)?', ingredient)
+                        if numbers:
+                            original_amount = float(numbers[0])
+                            new_amount = original_amount * multiplier
+                            adjusted_ingredient = re.sub(r'\d+(?:\.\d+)?', f"{new_amount:.1f}", ingredient, count=1)
+                            ingredients_by_category[category].append(f"{adjusted_ingredient} ({recipe['name']})")
+                        else:
+                            ingredients_by_category[category].append(f"{ingredient} x{multiplier:.1f} ({recipe['name']})")
+                    else:
+                        ingredients_by_category[category].append(f"{ingredient} ({recipe['name']})")
+        
+        # Mostrar por categorías
+        category_emojis = {
+            "proteinas": "🥩",
+            "legumbres": "🫘", 
+            "cereales": "🌾",
+            "vegetales": "🥬",
+            "especias": "🌶️",
+            "lacteos": "🥛",
+            "otros": "📋"
+        }
+        
+        for category, ingredients in ingredients_by_category.items():
+            if ingredients:
+                emoji = category_emojis.get(category, "📋")
+                response += f"{emoji} **{category.upper()}:**\n"
+                for ingredient in sorted(set(ingredients)):
+                    response += f"• {ingredient}\n"
+                response += "\n"
+        
+        response += "📝 **INSTRUCCIONES:**\n"
+        response += "1. Compra estas cantidades ajustadas\n"
+        response += "2. Usa `/divisiones` para saber cómo dividir lo cocinado\n"
+        response += "3. Cada división = 1 comida perfectamente balanceada\n\n"
+        
+        response += "💡 *Cantidades calculadas para 7 días de meal prep*"
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error en personal_shopping_command: {e}")
+        bot.reply_to(message, "❌ Error generando lista de compras. Intenta de nuevo.")
+
+@bot.message_handler(commands=['divisiones'])
+def divisions_command(message):
+    """Mostrar cómo dividir los alimentos cocinados"""
+    try:
+        # Verificar perfil
+        user_profile = meal_bot.get_user_profile()
+        if not user_profile:
+            bot.reply_to(message, 
+                "❌ **Perfil no configurado**\n\n"
+                "Usa `/perfil` para configurar tu perfil primero.",
+                parse_mode='Markdown')
+            return
+        
+        # Calcular divisiones
+        cooking_data = meal_bot.calculate_cooking_amounts()
+        if not cooking_data:
+            bot.reply_to(message, "❌ Error calculando divisiones. Intenta de nuevo.")
+            return
+        
+        response = "✂️ **CÓMO DIVIDIR TUS ALIMENTOS COCINADOS**\n\n"
+        
+        total_meals = cooking_data['weekly_summary']['total_meals']
+        daily_meals = cooking_data['weekly_summary']['daily_meals']
+        
+        response += f"📊 **Resumen:** {total_meals} comidas para 7 días ({daily_meals} por día)\n\n"
+        
+        # Agrupar por categoría
+        proteins = []
+        legumes = []
+        bases = []
+        vegetables = []
+        
+        for recipe_id, division_info in cooking_data['divisions'].items():
+            if recipe_id in meal_bot.data["recipes"]:
+                recipe = meal_bot.data["recipes"][recipe_id]
+                category = recipe.get('category', 'other')
+                
+                division_data = {
+                    'name': division_info['name'],
+                    'total_servings': division_info['total_cooked_servings'],
+                    'divisions': division_info['divisions_needed'],
+                    'portion_per_division': division_info['portion_per_division']
+                }
+                
+                if category == 'protein':
+                    proteins.append(division_data)
+                elif category == 'legume':
+                    legumes.append(division_data)
+                elif category in ['base', 'vegetable']:
+                    if 'vegetales' in division_info['name'].lower():
+                        vegetables.append(division_data)
+                    else:
+                        bases.append(division_data)
+        
+        # Mostrar instrucciones por categoría
+        categories = [
+            ("🥩 **PROTEÍNAS:**", proteins),
+            ("🫘 **LEGUMBRES:**", legumes), 
+            ("🌾 **BASES:**", bases),
+            ("🥬 **VEGETALES:**", vegetables)
+        ]
+        
+        for category_title, items in categories:
+            if items:
+                response += f"{category_title}\n"
+                for item in items:
+                    response += f"• **{item['name']}:**\n"
+                    response += f"  🍲 Total cocinado: {item['total_servings']:.1f} porciones\n"
+                    response += f"  ✂️ Dividir en: **{item['divisions']} tuppers iguales**\n"
+                    response += f"  🍽️ Cada tupper: {item['portion_per_division']:.2f} porciones\n\n"
+                response += "\n"
+        
+        response += "📝 **INSTRUCCIONES FINALES:**\n"
+        response += "1. Cocina todo según las recetas\n"
+        response += "2. Divide cada alimento cocinado en los tuppers indicados\n"
+        response += "3. Cada tupper = 1 comida balanceada\n"
+        response += "4. Solo calienta y come, ¡no más pesado!\n\n"
+        
+        response += "💡 *Perfecto para meal prep sin complicaciones*"
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error en divisions_command: {e}")
+        bot.reply_to(message, "❌ Error calculando divisiones. Intenta de nuevo.")
 
 @bot.message_handler(commands=['buscar'])
 def search_command(message):
