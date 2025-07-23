@@ -376,8 +376,10 @@ class MealPrepBot:
     
     def process_ingredients_with_claude(self, ingredients_list: list) -> dict:
         """Procesar y agregar ingredientes usando Claude API"""
+        logger.info(f"🤖 Iniciando procesamiento con Claude API para {len(ingredients_list)} ingredientes")
+        
         if claude_client is None:
-            logger.error("Claude client not available for ingredient processing")
+            logger.error("❌ Claude client is None - API not initialized")
             return None
             
         try:
@@ -387,38 +389,37 @@ class MealPrepBot:
                 for item in ingredients_list
             ])
             
-            prompt = f"""
-Eres un asistente especializado en meal prep. Procesa esta lista de ingredientes para crear una lista de compras optimizada.
+            prompt = f"""Procesa esta lista de ingredientes para meal prep y devuelve SOLO JSON válido.
 
-INGREDIENTES A PROCESAR:
+INGREDIENTES ({len(ingredients_list)} total):
 {ingredients_text}
 
-INSTRUCCIONES:
-1. Multiplica cada ingrediente por su factor correspondiente
-2. Agrega ingredientes similares (ej: "2.3 ajos" + "1.2 dientes de ajo" = "3.5 dientes de ajo")
-3. Estandariza unidades:
-   - Pesos: usa gramos para <1000g, kilogramos para ≥1000g
-   - Volúmenes: usa ml para <1000ml, litros para ≥1000ml
-   - NO CAMBIES: cucharadas (cda), cucharaditas (cdta) - mantenlas tal como están
-   - Para ingredientes sin unidad específica (ej: "calabacines"), estima el peso aproximado
-4. Categoriza los ingredientes en: proteinas, legumbres, cereales, vegetales, especias, lacteos, otros
-5. Para ingredientes "al gusto", mantenlos sin cantidad específica
+TAREAS:
+1. Multiplica cantidades por los factores dados
+2. Agrega duplicados: "ajos" + "dientes de ajo" = "dientes de ajo" total
+3. Convierte unidades:
+   - "tazas" → ml (1 taza = 250ml)
+   - Pesos: gramos si <1000g, kilogramos si ≥1000g  
+   - Volúmenes: ml si <1000ml, litros si ≥1000ml
+   - PRESERVAR: cda, cdta (no cambiar)
+4. Categoriza: proteinas, legumbres, cereales, vegetales, especias, lacteos, otros
 
-FORMATO DE RESPUESTA (JSON válido):
+RESPUESTA (SOLO JSON):
 {{
   "success": true,
   "ingredients_by_category": {{
-    "proteinas": ["2 kg pechugas de pollo", "12 huevos"],
-    "vegetales": ["500 g cebollas", "200 g ajos"],
-    "especias": ["sal y pimienta al gusto", "2 cda oregano seco"],
-    "otros": ["800 ml caldo de res"]
+    "proteinas": ["2.3 kg pechugas de pollo", "2.1 kg carne de res"],
+    "vegetales": ["400 g cebollas", "50 g ajos"],
+    "legumbres": ["1.2 kg frijoles negros", "1.4 kg garbanzos"],
+    "cereales": ["830 g quinoa", "750 g arroz integral"],
+    "especias": ["sal y pimienta al gusto", "4 cda oregano seco"],
+    "otros": ["1.5 L caldo de pollo", "800 ml leche de coco"]
   }},
-  "total_items": 15
+  "total_items": 25
 }}
-
-Si hay error, devuelve: {{"success": false, "error": "descripción del error"}}
 """
 
+            logger.info("📤 Enviando request a Claude API...")
             response = claude_client.messages.create(
                 model="claude-3-haiku-20240307",
                 max_tokens=2000,
@@ -429,21 +430,27 @@ Si hay error, devuelve: {{"success": false, "error": "descripción del error"}}
                 }]
             )
             
+            logger.info("📥 Respuesta recibida de Claude API")
+            claude_response_text = response.content[0].text.strip()
+            logger.info(f"🔍 Claude response (first 200 chars): {claude_response_text[:200]}...")
+            
             import json
-            result = json.loads(response.content[0].text.strip())
+            result = json.loads(claude_response_text)
             
             if result.get("success"):
-                logger.info(f"Claude procesó {len(ingredients_list)} ingredientes → {result.get('total_items', 0)} items únicos")
+                logger.info(f"✅ Claude procesó {len(ingredients_list)} ingredientes → {result.get('total_items', 0)} items únicos")
                 return result
             else:
-                logger.error(f"Claude reporting error: {result.get('error', 'Unknown error')}")
+                logger.error(f"❌ Claude reporting error: {result.get('error', 'Unknown error')}")
                 return None
                 
         except json.JSONDecodeError as e:
-            logger.error(f"Error parsing Claude JSON response: {e}")
+            logger.error(f"❌ Error parsing Claude JSON response: {e}")
+            logger.error(f"🔍 Raw response was: {claude_response_text if 'claude_response_text' in locals() else 'No response captured'}")
             return None
         except Exception as e:
-            logger.error(f"Error processing ingredients with Claude: {e}")
+            logger.error(f"❌ Error processing ingredients with Claude: {str(e)}")
+            logger.error(f"🔍 Exception type: {type(e).__name__}")
             return None
     
     def check_rotation_needed(self):
