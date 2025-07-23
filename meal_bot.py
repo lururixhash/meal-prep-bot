@@ -374,6 +374,78 @@ class MealPrepBot:
             else:
                 return f"❌ Error al procesar tu búsqueda: Connection error.\n\nIntenta de nuevo o busca una receta más específica."
     
+    def process_ingredients_with_claude(self, ingredients_list: list) -> dict:
+        """Procesar y agregar ingredientes usando Claude API"""
+        if claude_client is None:
+            logger.error("Claude client not available for ingredient processing")
+            return None
+            
+        try:
+            # Preparar la lista de ingredientes para enviar a Claude
+            ingredients_text = "\n".join([
+                f"- {item['ingredient']} (multiplicar por {item['multiplier']:.2f}) [categoría: {item['category']}]"
+                for item in ingredients_list
+            ])
+            
+            prompt = f"""
+Eres un asistente especializado en meal prep. Procesa esta lista de ingredientes para crear una lista de compras optimizada.
+
+INGREDIENTES A PROCESAR:
+{ingredients_text}
+
+INSTRUCCIONES:
+1. Multiplica cada ingrediente por su factor correspondiente
+2. Agrega ingredientes similares (ej: "2.3 ajos" + "1.2 dientes de ajo" = "3.5 dientes de ajo")
+3. Estandariza unidades:
+   - Pesos: usa gramos para <1000g, kilogramos para ≥1000g
+   - Volúmenes: usa ml para <1000ml, litros para ≥1000ml
+   - NO CAMBIES: cucharadas (cda), cucharaditas (cdta) - mantenlas tal como están
+   - Para ingredientes sin unidad específica (ej: "calabacines"), estima el peso aproximado
+4. Categoriza los ingredientes en: proteinas, legumbres, cereales, vegetales, especias, lacteos, otros
+5. Para ingredientes "al gusto", mantenlos sin cantidad específica
+
+FORMATO DE RESPUESTA (JSON válido):
+{{
+  "success": true,
+  "ingredients_by_category": {{
+    "proteinas": ["2 kg pechugas de pollo", "12 huevos"],
+    "vegetales": ["500 g cebollas", "200 g ajos"],
+    "especias": ["sal y pimienta al gusto", "2 cda oregano seco"],
+    "otros": ["800 ml caldo de res"]
+  }},
+  "total_items": 15
+}}
+
+Si hay error, devuelve: {{"success": false, "error": "descripción del error"}}
+"""
+
+            response = claude_client.messages.create(
+                model="claude-3-haiku-20240307",
+                max_tokens=2000,
+                temperature=0.1,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            
+            import json
+            result = json.loads(response.content[0].text.strip())
+            
+            if result.get("success"):
+                logger.info(f"Claude procesó {len(ingredients_list)} ingredientes → {result.get('total_items', 0)} items únicos")
+                return result
+            else:
+                logger.error(f"Claude reporting error: {result.get('error', 'Unknown error')}")
+                return None
+                
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing Claude JSON response: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error processing ingredients with Claude: {e}")
+            return None
+    
     def check_rotation_needed(self):
         """Verificar si es necesario rotar el menú"""
         last_rotation = self.data["user_preferences"].get("last_rotation")
@@ -1106,7 +1178,7 @@ def personal_shopping_command(message):
         logger.info(f"Enviando mensaje inicial ({len(initial_response)} chars)")
         bot.reply_to(message, initial_response, parse_mode='Markdown')
         
-        # Recopilar todos los ingredientes con sus multiplicadores y categorías
+        # Recopilar todos los ingredientes con sus multiplicadores
         all_ingredients = []
         
         for recipe_id, amounts in cooking_data['cooking_amounts'].items():
@@ -1115,38 +1187,55 @@ def personal_shopping_command(message):
                 multiplier = amounts['recipe_multiplier']
                 
                 # Procesar cada ingrediente
-                for ingredient in recipe["ingredients"]:
-                    # Detectar categoria del ingrediente
-                    category = "otros"
-                    ingredient_lower = ingredient.lower()
-                    
-                    for cat, items in meal_bot.data.get("shopping_categories", {}).items():
-                        if any(item in ingredient_lower for item in items):
-                            category = cat
-                            break
-                    
+                for ingredient in recipe["ingredients"]:                    
                     all_ingredients.append({
                         'ingredient': ingredient,
                         'multiplier': multiplier,
-                        'category': category
+                        'category': 'otros'  # Claude will categorize properly
                     })
         
-        # Agregar ingredientes usando el nuevo sistema
-        logger.info(f"Procesando {len(all_ingredients)} ingredientes para agregación")
-        aggregated_ingredients = meal_bot.aggregate_ingredients(all_ingredients)
-        logger.info(f"Resultado de agregación: {len(aggregated_ingredients)} ingredientes únicos")
+        logger.info(f"Procesando {len(all_ingredients)} ingredientes con Claude API...")
         
-        # Agrupar por categoría los ingredientes agregados
-        ingredients_by_category = {}
-        for ingredient_data in aggregated_ingredients.values():
-            category = ingredient_data['category']
-            if category not in ingredients_by_category:
-                ingredients_by_category[category] = []
+        # Procesar ingredientes con Claude
+        claude_result = meal_bot.process_ingredients_with_claude(all_ingredients)
+        
+        if claude_result and claude_result.get("success"):
+            # Usar el resultado de Claude
+            ingredients_by_category = claude_result["ingredients_by_category"]
+            logger.info(f"Claude procesó exitosamente → {claude_result.get('total_items', 0)} items únicos")
+        else:
+            # Fallback al sistema anterior si Claude falla
+            logger.warning("Claude API falló, usando sistema de fallback...")
             
-            # Formatear ingrediente con las nuevas unidades estandarizadas
-            formatted = meal_bot.format_ingredient(ingredient_data)
-            logger.info(f"Ingrediente formateado: '{formatted}' (categoría: {category})")
-            ingredients_by_category[category].append(formatted)
+            # Re-categorizar ingredientes usando el sistema local para fallback
+            for item in all_ingredients:
+                ingredient_lower = item['ingredient'].lower()
+                for cat, items in meal_bot.data.get("shopping_categories", {}).items():
+                    if any(keyword in ingredient_lower for keyword in items):
+                        item['category'] = cat
+                        break
+            
+            # Agregar ingredientes usando el sistema anterior como fallback
+            aggregated_ingredients = meal_bot.aggregate_ingredients(all_ingredients)
+            
+            # Agrupar por categoría los ingredientes agregados
+            ingredients_by_category = {}
+            if aggregated_ingredients:
+                for ingredient_data in aggregated_ingredients.values():
+                    category = ingredient_data['category']
+                    if category not in ingredients_by_category:
+                        ingredients_by_category[category] = []
+                    
+                    # Formatear ingrediente con las nuevas unidades estandarizadas
+                    formatted = meal_bot.format_ingredient(ingredient_data)
+                    ingredients_by_category[category].append(formatted)
+            else:
+                # Si incluso el fallback falla, mostrar ingredientes sin procesar
+                logger.error("Sistema de fallback también falló, mostrando ingredientes sin procesar")
+                ingredients_by_category = {"otros": []}
+                for item in all_ingredients:
+                    ingredient_with_mult = f"{item['ingredient']} ×{item['multiplier']:.1f}"
+                    ingredients_by_category["otros"].append(ingredient_with_mult)
         
         # Enviar categorías por separado
         category_emojis = {
