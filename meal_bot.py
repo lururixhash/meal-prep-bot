@@ -582,6 +582,161 @@ class MealPrepBot:
             "num_comidas": num_comidas
         }
     
+    def parse_ingredient(self, ingredient: str) -> dict:
+        """Parsear ingrediente para extraer cantidad, unidad y nombre"""
+        import re
+        
+        # Regex para capturar cantidad, unidad y nombre
+        pattern = r'^(\d+(?:\.\d+)?)\s*([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]*)\s+(.+)$'
+        match = re.match(pattern, ingredient.strip())
+        
+        if match:
+            quantity = float(match.group(1))
+            unit = match.group(2).lower().strip()
+            name = match.group(3).strip()
+            
+            return {
+                'quantity': quantity,
+                'unit': unit,
+                'name': name,
+                'original': ingredient
+            }
+        else:
+            # Si no se puede parsear, devolver tal como está
+            return {
+                'quantity': 1.0,
+                'unit': '',
+                'name': ingredient,
+                'original': ingredient
+            }
+    
+    def standardize_unit(self, quantity: float, unit: str, ingredient_name: str) -> tuple:
+        """Estandarizar unidades a kg/g para sólidos, L/ml para líquidos"""
+        
+        # No modificar cucharadas y cucharaditas
+        if unit in ['cda', 'cdas', 'cucharada', 'cucharadas', 'cdta', 'cdtas', 'cucharadita', 'cucharaditas']:
+            return quantity, unit
+        
+        # Unidades de peso
+        weight_units = {
+            'kg': 1000,
+            'kilos': 1000,
+            'kilogramo': 1000,
+            'kilogramos': 1000,
+            'g': 1,
+            'gr': 1,
+            'gramos': 1,
+            'gramo': 1
+        }
+        
+        # Unidades de volumen
+        volume_units = {
+            'l': 1000,
+            'litro': 1000,
+            'litros': 1000,
+            'ml': 1,
+            'mililitro': 1,
+            'mililitros': 1,
+            'taza': 250,  # 1 taza = 250ml
+            'tazas': 250,
+            'vaso': 200,  # 1 vaso = 200ml
+            'vasos': 200
+        }
+        
+        # Determinar si es peso o volumen por el contexto
+        liquid_keywords = ['caldo', 'agua', 'leche', 'aceite', 'vinagre', 'jugo', 'vino', 'salsa líquida']
+        is_liquid = any(keyword in ingredient_name.lower() for keyword in liquid_keywords)
+        
+        if unit in weight_units:
+            # Convertir a gramos base
+            grams = quantity * weight_units[unit]
+            if grams >= 1000:
+                return round(grams / 1000, 2), 'kg'
+            else:
+                return int(grams), 'g'
+                
+        elif unit in volume_units:
+            # Convertir a ml base
+            ml = quantity * volume_units[unit]
+            if ml >= 1000:
+                return round(ml / 1000, 2), 'L'
+            else:
+                return int(ml), 'ml'
+                
+        elif is_liquid and unit == '':
+            # Si es líquido pero no tiene unidad explícita, asumir ml
+            if quantity >= 1000:
+                return round(quantity / 1000, 2), 'L'
+            else:
+                return int(quantity), 'ml'
+        
+        # Si no se puede estandarizar, devolver tal como está
+        return quantity, unit
+    
+    def aggregate_ingredients(self, all_ingredients: list) -> dict:
+        """Agregar ingredientes similares sumando cantidades"""
+        aggregated = {}
+        
+        for ingredient_data in all_ingredients:
+            parsed = self.parse_ingredient(ingredient_data['ingredient'])
+            
+            # Ajustar cantidad por el multiplicador de la receta
+            adjusted_quantity = parsed['quantity'] * ingredient_data['multiplier']
+            
+            # Estandarizar unidades
+            std_quantity, std_unit = self.standardize_unit(
+                adjusted_quantity, 
+                parsed['unit'], 
+                parsed['name']
+            )
+            
+            # Usar el nombre como clave para agregar
+            key = parsed['name'].lower().strip()
+            
+            if key in aggregated:
+                # Si ya existe, sumar cantidades (solo si tienen la misma unidad)
+                if aggregated[key]['unit'] == std_unit:
+                    aggregated[key]['quantity'] += std_quantity
+                else:
+                    # Si tienen diferentes unidades, mantener por separado
+                    alt_key = f"{key}_{std_unit}"
+                    if alt_key in aggregated:
+                        aggregated[alt_key]['quantity'] += std_quantity
+                    else:
+                        aggregated[alt_key] = {
+                            'quantity': std_quantity,
+                            'unit': std_unit,
+                            'name': parsed['name'],
+                            'category': ingredient_data['category']
+                        }
+            else:
+                aggregated[key] = {
+                    'quantity': std_quantity,
+                    'unit': std_unit,
+                    'name': parsed['name'],
+                    'category': ingredient_data['category']
+                }
+        
+        return aggregated
+    
+    def format_ingredient(self, ingredient_data: dict) -> str:
+        """Formatear ingrediente con cantidad y unidad estandarizada"""
+        quantity = ingredient_data['quantity']
+        unit = ingredient_data['unit']
+        name = ingredient_data['name']
+        
+        # Formatear cantidad
+        if isinstance(quantity, float) and quantity.is_integer():
+            quantity_str = str(int(quantity))
+        else:
+            quantity_str = f"{quantity:.1f}".rstrip('0').rstrip('.')
+        
+        # Formatear con unidad
+        if unit:
+            return f"{quantity_str}{unit} {name}"
+        else:
+            return f"{quantity_str} {name}"
+
     def calculate_cooking_amounts(self) -> dict:
         """Calcular cantidades de cocina y divisiones basadas en porciones personalizadas"""
         portions_data = self.calculate_personal_portions()
@@ -916,15 +1071,15 @@ def personal_shopping_command(message):
         logger.info(f"Enviando mensaje inicial ({len(initial_response)} chars)")
         bot.reply_to(message, initial_response, parse_mode='Markdown')
         
-        # Agrupar ingredientes por categoría
-        ingredients_by_category = {}
+        # Recopilar todos los ingredientes con sus multiplicadores y categorías
+        all_ingredients = []
         
         for recipe_id, amounts in cooking_data['cooking_amounts'].items():
             if recipe_id in meal_bot.data["recipes"]:
                 recipe = meal_bot.data["recipes"][recipe_id]
                 multiplier = amounts['recipe_multiplier']
                 
-                # Procesar ingredientes
+                # Procesar cada ingrediente
                 for ingredient in recipe["ingredients"]:
                     # Detectar categoria del ingrediente
                     category = "otros"
@@ -935,23 +1090,25 @@ def personal_shopping_command(message):
                             category = cat
                             break
                     
-                    if category not in ingredients_by_category:
-                        ingredients_by_category[category] = []
-                    
-                    # Ajustar cantidad del ingrediente (formato más compacto)
-                    if multiplier != 1.0:
-                        # Intentar extraer número y ajustarlo
-                        import re
-                        numbers = re.findall(r'\d+(?:\.\d+)?', ingredient)
-                        if numbers:
-                            original_amount = float(numbers[0])
-                            new_amount = original_amount * multiplier
-                            adjusted_ingredient = re.sub(r'\d+(?:\.\d+)?', f"{new_amount:.1f}", ingredient, count=1)
-                            ingredients_by_category[category].append(adjusted_ingredient)
-                        else:
-                            ingredients_by_category[category].append(f"{ingredient} ×{multiplier:.1f}")
-                    else:
-                        ingredients_by_category[category].append(ingredient)
+                    all_ingredients.append({
+                        'ingredient': ingredient,
+                        'multiplier': multiplier,
+                        'category': category
+                    })
+        
+        # Agregar ingredientes usando el nuevo sistema
+        aggregated_ingredients = meal_bot.aggregate_ingredients(all_ingredients)
+        
+        # Agrupar por categoría los ingredientes agregados
+        ingredients_by_category = {}
+        for ingredient_data in aggregated_ingredients.values():
+            category = ingredient_data['category']
+            if category not in ingredients_by_category:
+                ingredients_by_category[category] = []
+            
+            # Formatear ingrediente con las nuevas unidades estandarizadas
+            formatted = meal_bot.format_ingredient(ingredient_data)
+            ingredients_by_category[category].append(formatted)
         
         # Enviar categorías por separado
         category_emojis = {
@@ -970,7 +1127,7 @@ def personal_shopping_command(message):
             if ingredients:
                 emoji = category_emojis.get(category, "📋")
                 category_response = f"{emoji} **{category.upper()}:**\n"
-                for ingredient in sorted(set(ingredients)):
+                for ingredient in sorted(ingredients):
                     category_response += f"• {ingredient}\n"
                 
                 logger.info(f"Enviando categoría {category} ({len(category_response)} chars, {len(ingredients)} ingredientes)")
