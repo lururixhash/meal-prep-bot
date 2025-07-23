@@ -516,6 +516,15 @@
     },
     "last_rotation": null
   },
+  "shopping_categories": {
+    "proteinas": ["pollo", "carne", "res", "pechuga", "muslo", "huevo", "huevos"],
+    "legumbres": ["frijoles", "garbanzos", "lentejas", "alubias", "habas"],
+    "cereales": ["arroz", "quinoa", "avena", "pasta", "pan"],
+    "vegetales": ["tomate", "cebolla", "ajo", "pimiento", "calabacín", "brócoli", "espinaca", "zanahoria", "aceitunas", "alcaparras"],
+    "especias": ["sal", "pimienta", "oregano", "tomillo", "romero", "comino", "paprika", "curry"],
+    "lacteos": ["queso", "leche", "yogur", "mantequilla"],
+    "otros": ["aceite", "vinagre", "lata", "caldo"]
+  },
   "shopping_lists": {},
   "cooking_history": []
 }

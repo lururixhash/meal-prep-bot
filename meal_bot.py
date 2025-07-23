@@ -586,29 +586,60 @@ class MealPrepBot:
         """Parsear ingrediente para extraer cantidad, unidad y nombre"""
         import re
         
-        # Regex para capturar cantidad, unidad y nombre
-        pattern = r'^(\d+(?:\.\d+)?)\s*([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]*)\s+(.+)$'
-        match = re.match(pattern, ingredient.strip())
+        ingredient = ingredient.strip()
         
-        if match:
-            quantity = float(match.group(1))
-            unit = match.group(2).lower().strip()
-            name = match.group(3).strip()
-            
+        # Patrones múltiples para diferentes formatos
+        patterns = [
+            # "2 kg pechugas de pollo", "800g tomates"
+            r'^(\d+(?:\.\d+)?)\s*([a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]+)\s+(.+)$',
+            # "2 latas tomates triturados (800g)" - ignorar el paréntesis
+            r'^(\d+(?:\.\d+)?)\s+(latas?|unidades?|dientes?|cdas?|cdtas?)\s+([^(]+)(?:\([^)]*\))?$',
+            # "2 tomates grandes", "1 cebolla grande" 
+            r'^(\d+(?:\.\d+)?)\s+([^0-9\s][^(]*?)(?:\s+(?:grande|pequeño|mediano|al gusto))?(?:\([^)]*\))?$'
+        ]
+        
+        for pattern in patterns:
+            match = re.match(pattern, ingredient, re.IGNORECASE)
+            if match:
+                quantity = float(match.group(1))
+                
+                if len(match.groups()) == 3:
+                    if pattern == patterns[1]:  # Formato "latas/unidades"
+                        unit = match.group(2).lower().strip()
+                        name = match.group(3).strip()
+                    elif pattern == patterns[0]:  # Formato con unidad kg/g
+                        unit = match.group(2).lower().strip()
+                        name = match.group(3).strip()
+                    else:  # Formato "2 tomates"
+                        unit = ''
+                        name = match.group(2).strip()
+                else:
+                    unit = ''
+                    name = match.group(2).strip() if len(match.groups()) >= 2 else ingredient
+                
+                return {
+                    'quantity': quantity,
+                    'unit': unit,
+                    'name': name,
+                    'original': ingredient
+                }
+        
+        # Si no coincide con ningún patrón, manejar casos especiales
+        if any(word in ingredient.lower() for word in ['al gusto', 'c/n', 'cantidad necesaria']):
             return {
-                'quantity': quantity,
-                'unit': unit,
-                'name': name,
-                'original': ingredient
-            }
-        else:
-            # Si no se puede parsear, devolver tal como está
-            return {
-                'quantity': 1.0,
+                'quantity': 0,  # Cantidad especial para "al gusto"
                 'unit': '',
                 'name': ingredient,
                 'original': ingredient
             }
+        
+        # Fallback: devolver tal como está
+        return {
+            'quantity': 1.0,
+            'unit': '',
+            'name': ingredient,
+            'original': ingredient
+        }
     
     def standardize_unit(self, quantity: float, unit: str, ingredient_name: str) -> tuple:
         """Estandarizar unidades a kg/g para sólidos, L/ml para líquidos"""
@@ -725,6 +756,10 @@ class MealPrepBot:
         unit = ingredient_data['unit']
         name = ingredient_data['name']
         
+        # Manejar ingredientes "al gusto" (cantidad = 0)
+        if quantity == 0:
+            return name
+        
         # Formatear cantidad
         if isinstance(quantity, float) and quantity.is_integer():
             quantity_str = str(int(quantity))
@@ -733,7 +768,7 @@ class MealPrepBot:
         
         # Formatear con unidad
         if unit:
-            return f"{quantity_str}{unit} {name}"
+            return f"{quantity_str} {unit} {name}"
         else:
             return f"{quantity_str} {name}"
 
@@ -1097,7 +1132,9 @@ def personal_shopping_command(message):
                     })
         
         # Agregar ingredientes usando el nuevo sistema
+        logger.info(f"Procesando {len(all_ingredients)} ingredientes para agregación")
         aggregated_ingredients = meal_bot.aggregate_ingredients(all_ingredients)
+        logger.info(f"Resultado de agregación: {len(aggregated_ingredients)} ingredientes únicos")
         
         # Agrupar por categoría los ingredientes agregados
         ingredients_by_category = {}
@@ -1108,6 +1145,7 @@ def personal_shopping_command(message):
             
             # Formatear ingrediente con las nuevas unidades estandarizadas
             formatted = meal_bot.format_ingredient(ingredient_data)
+            logger.info(f"Ingrediente formateado: '{formatted}' (categoría: {category})")
             ingredients_by_category[category].append(formatted)
         
         # Enviar categorías por separado
