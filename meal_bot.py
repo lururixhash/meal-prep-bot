@@ -518,44 +518,75 @@ RESPUESTA (SOLO JSON):
         return available_complements
     
     def get_daily_complements_suggestion(self):
-        """Sugerir complementos diarios balanceados"""
-        complements = self.get_available_complements()
+        """Sugerir complementos diarios balanceados basados en selección del usuario"""
+        # Obtener complementos seleccionados por el usuario
+        weekly_complements = self.data["user_preferences"].get("weekly_complements", [])
+        
+        if not weekly_complements:
+            return {"desayuno": [], "media_mañana": [], "media_tarde": []}
+        
+        # Obtener datos de los complementos seleccionados
+        complements_data = self.data.get("complementos_naturales", {})
+        selected_items = []
+        
+        for complement_id in weekly_complements:
+            for category, items in complements_data.items():
+                if complement_id in items:
+                    item_data = items[complement_id].copy()
+                    item_data["category_type"] = category
+                    selected_items.append(item_data)
+                    break
+        
+        if not selected_items:
+            return {"desayuno": [], "media_mañana": [], "media_tarde": []}
+        
+        # Distribuir complementos por timing según tipo
         suggestions = {
             "desayuno": [],
             "media_mañana": [],
             "media_tarde": []
         }
         
-        # Importar random para variedad
         import random
         
-        # Desayuno: Lácteo + fruta/miel + fruto seco
-        if "lacteos_naturales" in complements and complements["lacteos_naturales"]:
-            suggestions["desayuno"].append(random.choice(complements["lacteos_naturales"]))
+        # Separar por categorías
+        lacteos = [item for item in selected_items if item["category_type"] == "lacteos_naturales"]
+        frutos_secos = [item for item in selected_items if item["category_type"] == "frutos_secos"]
+        frutas_frescas = [item for item in selected_items if item["category_type"] == "frutas_frescas"]
+        frutas_secas = [item for item in selected_items if item["category_type"] == "frutas_secas"]
+        aceitunas = [item for item in selected_items if item["category_type"] == "aceitunas_encurtidos"]
+        otros = [item for item in selected_items if item["category_type"] == "otros_naturales"]
         
-        if "otros_naturales" in complements and complements["otros_naturales"]:
-            miel = [item for item in complements["otros_naturales"] if "miel" in item["id"]]
-            if miel:
-                suggestions["desayuno"].append(miel[0])
+        # DESAYUNO: Lácteos + miel + frutos secos
+        if lacteos:
+            suggestions["desayuno"].append(random.choice(lacteos))
+        if otros:
+            miel_items = [item for item in otros if "miel" in item["id"]]
+            if miel_items:
+                suggestions["desayuno"].append(miel_items[0])
+        if frutos_secos:
+            suggestions["desayuno"].append(random.choice(frutos_secos))
         
-        if "frutos_secos" in complements and complements["frutos_secos"]:
-            suggestions["desayuno"].append(random.choice(complements["frutos_secos"]))
+        # MEDIA MAÑANA: Frutas frescas + frutos secos
+        if frutas_frescas:
+            suggestions["media_mañana"].append(random.choice(frutas_frescas))
+        if frutos_secos and len(frutos_secos) > 1:
+            # Elegir un fruto seco diferente si hay varios
+            available_nuts = [item for item in frutos_secos if item not in suggestions["desayuno"]]
+            if available_nuts:
+                suggestions["media_mañana"].append(random.choice(available_nuts))
+            else:
+                suggestions["media_mañana"].append(random.choice(frutos_secos))
         
-        # Media mañana: Fruta + fruto seco o queso
-        if "frutas_frescas" in complements and complements["frutas_frescas"]:
-            suggestions["media_mañana"].append(random.choice(complements["frutas_frescas"]))
-        
-        if "frutos_secos" in complements and complements["frutos_secos"]:
-            suggestions["media_mañana"].append(random.choice(complements["frutos_secos"]))
-        
-        # Media tarde: Aceitunas + queso o fruta seca
-        if "aceitunas_encurtidos" in complements and complements["aceitunas_encurtidos"]:
-            suggestions["media_tarde"].append(random.choice(complements["aceitunas_encurtidos"]))
-        
-        if "lacteos_naturales" in complements and complements["lacteos_naturales"]:
-            quesos = [item for item in complements["lacteos_naturales"] if "queso" in item["id"]]
+        # MEDIA TARDE: Aceitunas + quesos + frutas secas
+        if aceitunas:
+            suggestions["media_tarde"].append(random.choice(aceitunas))
+        if lacteos:
+            quesos = [item for item in lacteos if "queso" in item["id"]]
             if quesos:
                 suggestions["media_tarde"].append(random.choice(quesos))
+        if frutas_secas:
+            suggestions["media_tarde"].append(random.choice(frutas_secas))
         
         return suggestions
     
@@ -581,6 +612,182 @@ RESPUESTA (SOLO JSON):
                 logger.warning(f"Complemento {complement_id} no encontrado en base de datos")
         
         return total_macros
+    
+    def calculate_complementary_distribution(self):
+        """Calcular distribución complementaria entre recetas principales y complementos"""
+        user_profile = self.get_user_profile()
+        if not user_profile:
+            return None
+        
+        # Obtener macros objetivo totales del usuario
+        target_macros = user_profile["macros_calculados"]
+        total_calories = target_macros["calories"]
+        total_protein = target_macros["protein"]
+        total_carbs = target_macros["carbs"]
+        total_fat = target_macros["fat"]
+        
+        # Verificar si hay complementos configurados
+        weekly_complements = self.data["user_preferences"].get("weekly_complements", [])
+        
+        if not weekly_complements:
+            # Sin complementos: recetas obtienen 100% de macros
+            return {
+                "has_complements": False,
+                "complements_percentage": 0,
+                "recipes_percentage": 100,
+                "complements_macros": {"protein": 0, "carbs": 0, "fat": 0, "calories": 0},
+                "recipes_target_macros": target_macros,
+                "distribution_strategy": "recipes_only"
+            }
+        
+        # Con complementos: calcular distribución inteligente
+        complements_macros = self.calculate_complements_macros(weekly_complements)
+        
+        # Calcular porcentaje que representan los complementos
+        complements_percentage = (complements_macros["calories"] / total_calories) * 100
+        
+        # Ajustar si excede el límite recomendado (20%)
+        max_complements_percentage = 20
+        if complements_percentage > max_complements_percentage:
+            # Escalar complementos para que no excedan 20%
+            scale_factor = max_complements_percentage / complements_percentage
+            complements_macros = {
+                "protein": complements_macros["protein"] * scale_factor,
+                "carbs": complements_macros["carbs"] * scale_factor,
+                "fat": complements_macros["fat"] * scale_factor,
+                "calories": complements_macros["calories"] * scale_factor
+            }
+            complements_percentage = max_complements_percentage
+        
+        # Calcular macros restantes para recetas principales
+        recipes_percentage = 100 - complements_percentage
+        recipes_target_macros = {
+            "protein": total_protein - complements_macros["protein"],
+            "carbs": total_carbs - complements_macros["carbs"],
+            "fat": total_fat - complements_macros["fat"],
+            "calories": total_calories - complements_macros["calories"]
+        }
+        
+        return {
+            "has_complements": True,
+            "complements_percentage": round(complements_percentage, 1),
+            "recipes_percentage": round(recipes_percentage, 1),
+            "complements_macros": complements_macros,
+            "recipes_target_macros": recipes_target_macros,
+            "distribution_strategy": "complementary_integrated"
+        }
+    
+    def calculate_personal_portions_with_complements(self, num_comidas: int = 5) -> dict:
+        """Calcular porciones personalizadas integrando complementos mediterráneos"""
+        user_profile = self.get_user_profile()
+        if not user_profile:
+            return None
+        
+        # Obtener distribución complementaria
+        distribution = self.calculate_complementary_distribution()
+        if not distribution:
+            return None
+        
+        # Usar macros ajustados para recetas principales
+        target_macros = distribution["recipes_target_macros"]
+        daily_protein = target_macros["protein"]
+        daily_carbs = target_macros["carbs"] 
+        daily_fat = target_macros["fat"]
+        daily_calories = target_macros["calories"]
+        
+        # Obtener recetas de semana actual
+        current_week = self.data["user_preferences"]["current_week"]
+        week_key = f"week_{current_week}" if current_week <= 2 else f"week_3_4"
+        
+        if week_key not in self.data["meal_plans"]:
+            week_key = "week_1_2"  # Fallback
+        
+        week_recipes = self.data["meal_plans"][week_key]
+        
+        # Calcular macros por porción de cada categoría
+        recipes_data = {}
+        for category in ["proteins", "legumes", "base_components"]:
+            recipes_data[category] = []
+            recipe_ids = week_recipes.get(category, [])
+            for recipe_id in recipe_ids:
+                if recipe_id in self.data["recipes"]:
+                    recipe = self.data["recipes"][recipe_id]
+                    recipes_data[category].append({
+                        "id": recipe_id,
+                        "name": recipe["name"],
+                        "macros": recipe["macros_per_serving"]
+                    })
+        
+        # Distribución típica de macros por comida (ajustada para sistema complementario)
+        protein_from_proteins = daily_protein * 0.40  # Aumentado ligeramente
+        protein_from_legumes = daily_protein * 0.35   # Aumentado
+        protein_from_bases = daily_protein * 0.25     # Reducido (complementos aportan proteína)
+        
+        carbs_from_proteins = daily_carbs * 0.08      # Reducido
+        carbs_from_legumes = daily_carbs * 0.37       # Ligeramente aumentado
+        carbs_from_bases = daily_carbs * 0.55         # Mantenido (pero menos frutas en recetas)
+        
+        fat_from_proteins = daily_fat * 0.50          # Aumentado (menos frutos secos en recetas)
+        fat_from_legumes = daily_fat * 0.10           # Reducido
+        fat_from_bases = daily_fat * 0.40             # Mantenido
+        
+        # Calcular porciones diarias necesarias de cada receta (ajustadas)
+        portions_needed = {}
+        
+        # Proteínas
+        if recipes_data["proteins"]:
+            for recipe in recipes_data["proteins"]:
+                recipe_protein = recipe["macros"]["protein"]
+                # Dividir entre el número de recetas de proteína
+                daily_portions = (protein_from_proteins / len(recipes_data["proteins"])) / recipe_protein
+                portions_needed[recipe["id"]] = {
+                    "name": recipe["name"],
+                    "daily_portions": daily_portions,
+                    "portions_per_meal": daily_portions / num_comidas,
+                    "category": "protein"
+                }
+        
+        # Legumbres
+        if recipes_data["legumes"]:
+            for recipe in recipes_data["legumes"]:
+                recipe_protein = recipe["macros"]["protein"]
+                daily_portions = (protein_from_legumes / len(recipes_data["legumes"])) / recipe_protein
+                portions_needed[recipe["id"]] = {
+                    "name": recipe["name"],
+                    "daily_portions": daily_portions,
+                    "portions_per_meal": daily_portions / num_comidas,
+                    "category": "legume"
+                }
+        
+        # Bases (cereales y vegetales)
+        if recipes_data["base_components"]:
+            for recipe in recipes_data["base_components"]:
+                recipe_carbs = recipe["macros"]["carbs"]
+                if recipe_carbs > 0:
+                    daily_portions = (carbs_from_bases / len(recipes_data["base_components"])) / recipe_carbs
+                    portions_needed[recipe["id"]] = {
+                        "name": recipe["name"],
+                        "daily_portions": daily_portions,
+                        "portions_per_meal": daily_portions / num_comidas,
+                        "category": "base"
+                    }
+        
+        # Calcular macros totales resultantes (recetas + complementos)
+        total_daily_macros = {
+            "protein": target_macros["protein"] + distribution["complements_macros"]["protein"],
+            "carbs": target_macros["carbs"] + distribution["complements_macros"]["carbs"],
+            "fat": target_macros["fat"] + distribution["complements_macros"]["fat"],
+            "calories": target_macros["calories"] + distribution["complements_macros"]["calories"]
+        }
+        
+        return {
+            "portions_needed": portions_needed,
+            "daily_macros": total_daily_macros,
+            "recipes_macros": target_macros,
+            "complements_macros": distribution["complements_macros"],
+            "distribution": distribution,
+            "num_comidas": num_comidas
+        }
     
     def get_anchored_favorites(self):
         """Obtener recetas marcadas como favoritas (ancladas)"""
@@ -1020,8 +1227,8 @@ RESPUESTA (SOLO JSON):
             return f"{quantity_str} {name}"
 
     def calculate_cooking_amounts(self) -> dict:
-        """Calcular cantidades de cocina y divisiones basadas en porciones personalizadas"""
-        portions_data = self.calculate_personal_portions()
+        """Calcular cantidades de cocina y divisiones basadas en porciones personalizadas con complementos"""
+        portions_data = self.calculate_personal_portions_with_complements()
         if not portions_data:
             return None
             
@@ -1182,7 +1389,7 @@ def menu_command(message):
         # Obtener datos del menú actual
         meal_plan = meal_bot.get_current_meal_plan()
         current_week = meal_bot.data["user_preferences"]["current_week"]
-        portions_data = meal_bot.calculate_personal_portions()
+        portions_data = meal_bot.calculate_personal_portions_with_complements()
         cooking_data = meal_bot.calculate_cooking_amounts()
         
         if not portions_data or not cooking_data:
@@ -1193,12 +1400,20 @@ def menu_command(message):
         response = f"📅 **MENÚ SEMANAL (LUNES - VIERNES)**\n"
         response += f"🗓️ Semana {current_week} • Comida Natural\n\n"
         
-        # Macros diarios objetivo
+        # Macros diarios con distribución complementaria
         daily_macros = portions_data['daily_macros']
-        response += f"🎯 **MACROS DIARIOS OBJETIVO:**\n"
+        distribution = portions_data.get('distribution', {})
+        
+        response += f"🎯 **MACROS DIARIOS TOTALES:**\n"
         response += f"• {daily_macros['calories']} kcal | {daily_macros['protein']}g proteína\n"
         response += f"• {daily_macros['carbs']}g carbos | {daily_macros['fat']}g grasas\n"
         response += f"• Distribuido en {portions_data['num_comidas']} comidas\n\n"
+        
+        # Mostrar distribución si hay complementos
+        if distribution.get('has_complements', False):
+            response += f"📊 **DISTRIBUCIÓN COMPLEMENTARIA:**\n"
+            response += f"🍽️ Recetas principales: {distribution['recipes_percentage']}%\n"
+            response += f"🥜 Complementos mediterráneos: {distribution['complements_percentage']}%\n\n"
         
         bot.reply_to(message, response, parse_mode='Markdown')
         
@@ -1239,26 +1454,24 @@ def menu_command(message):
                         combo_names = [item['name'] for item in items[:2]]  # Máximo 2 items
                         day_response += f"{emoji} {timing_name}: {' + '.join(combo_names)}\n"
             
-            # Información de macros por día (incluyendo complementos si existen)
+            # Información de macros por día (sistema complementario integrado)
             total_calories = daily_macros['calories']
             total_protein = daily_macros['protein']
             total_carbs = daily_macros['carbs']
             total_fat = daily_macros['fat']
             
-            if weekly_complements:
-                # Añadir macros de complementos
-                complements_macros = meal_bot.calculate_complements_macros(weekly_complements)
-                total_calories += complements_macros['calories']
-                total_protein += complements_macros['protein']
-                total_carbs += complements_macros['carbs']
-                total_fat += complements_macros['fat']
-            
             day_response += f"\n📊 **MACROS TOTALES DEL DÍA:**\n"
             day_response += f"• {total_calories} kcal • {total_protein}g prot\n"
             day_response += f"• {total_carbs}g carbs • {total_fat}g grasas\n"
             
-            if weekly_complements:
-                day_response += f"*Incluye complementos mediterráneos naturales*\n"
+            # Mostrar desglose de distribución si hay complementos
+            if distribution.get('has_complements', False):
+                recipes_macros = portions_data.get('recipes_macros', {})
+                complements_macros = portions_data.get('complements_macros', {})
+                
+                day_response += f"\n🔍 **Desglose:**\n"
+                day_response += f"🍽️ Recetas: {recipes_macros['calories']} kcal ({distribution['recipes_percentage']}%)\n"
+                day_response += f"🥜 Complementos: {complements_macros['calories']} kcal ({distribution['complements_percentage']}%)\n"
             
             bot.send_message(message.chat.id, day_response, parse_mode='Markdown')
             time.sleep(0.8)
@@ -1768,6 +1981,54 @@ def favorite_command(message):
     except Exception as e:
         logger.error(f"Error en favorite_command: {e}")
         bot.reply_to(message, "❌ Error al actualizar favoritos. Intenta de nuevo.")
+
+@bot.message_handler(commands=['test_distribucion'])
+def test_distribucion_command(message):
+    """Comando de prueba para verificar distribución complementaria"""
+    try:
+        # Verificar perfil
+        user_profile = meal_bot.get_user_profile()
+        if not user_profile:
+            bot.reply_to(message, "❌ Configura tu perfil primero con `/perfil`")
+            return
+        
+        # Obtener distribución
+        distribution = meal_bot.calculate_complementary_distribution()
+        if not distribution:
+            bot.reply_to(message, "❌ Error calculando distribución")
+            return
+        
+        response = "🧪 **PRUEBA DE DISTRIBUCIÓN COMPLEMENTARIA**\n\n"
+        
+        if distribution["has_complements"]:
+            response += f"✅ **Sistema Complementario Activo**\n"
+            response += f"🍽️ Recetas principales: {distribution['recipes_percentage']}%\n"
+            response += f"🥜 Complementos mediterráneos: {distribution['complements_percentage']}%\n\n"
+            
+            response += f"📊 **Macros de Recetas Principales:**\n"
+            recipes_macros = distribution['recipes_target_macros']
+            response += f"• {recipes_macros['calories']} kcal | {recipes_macros['protein']}g prot\n"
+            response += f"• {recipes_macros['carbs']}g carbs | {recipes_macros['fat']}g grasas\n\n"
+            
+            response += f"🥜 **Macros de Complementos:**\n"
+            complements_macros = distribution['complements_macros']
+            response += f"• {complements_macros['calories']} kcal | {complements_macros['protein']}g prot\n"
+            response += f"• {complements_macros['carbs']}g carbs | {complements_macros['fat']}g grasas\n\n"
+            
+            total_calories = recipes_macros['calories'] + complements_macros['calories']
+            target_calories = user_profile["macros_calculados"]["calories"]
+            response += f"🎯 **Verificación:** {total_calories} / {target_calories} kcal"
+        else:
+            response += f"ℹ️ **Sistema de Solo Recetas**\n"
+            response += f"🍽️ Recetas principales: 100%\n"
+            response += f"🥜 Sin complementos configurados\n\n"
+            response += f"💡 Usa `/nueva_semana` opción 5 para añadir complementos"
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error en test_distribucion_command: {e}")
+        bot.reply_to(message, f"❌ Error: {e}")
 
 @bot.message_handler(commands=['complementos'])
 def complementos_command(message):
