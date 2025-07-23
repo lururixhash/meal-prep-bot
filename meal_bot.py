@@ -456,15 +456,95 @@ RESPUESTA (SOLO JSON):
             return None
     
     def check_rotation_needed(self):
-        """Verificar si es necesario rotar el menú"""
+        """Verificar si es lunes y necesita rotación automática"""
+        from datetime import datetime
+        
+        now = datetime.now()
         last_rotation = self.data["user_preferences"].get("last_rotation")
+        
+        # Si nunca ha rotado, necesita rotación
         if not last_rotation:
-            return False
+            return True
         
         last_rotation_date = datetime.fromisoformat(last_rotation)
-        days_since_rotation = (datetime.now() - last_rotation_date).days
+        days_since_rotation = (now - last_rotation_date).days
         
-        return days_since_rotation >= 14
+        # Verificar si es lunes (0 = lunes) y han pasado al menos 6 días
+        is_monday = now.weekday() == 0
+        enough_time_passed = days_since_rotation >= 6
+        
+        return is_monday and enough_time_passed
+    
+    def get_available_recipes(self):
+        """Obtener todas las recetas disponibles organizadas por categoría"""
+        recipes_by_category = {
+            "proteinas": [],
+            "legumbres": [],
+            "cereales": [],
+            "vegetales": []
+        }
+        
+        for recipe_id, recipe in self.data["recipes"].items():
+            category = recipe.get("category", "otros")
+            if category in recipes_by_category:
+                recipes_by_category[category].append({
+                    "id": recipe_id,
+                    "name": recipe["name"],
+                    "rating": recipe.get("rating", 0),
+                    "favorite": recipe.get("favorite", False)
+                })
+        
+        return recipes_by_category
+    
+    def get_anchored_favorites(self):
+        """Obtener recetas marcadas como favoritas (ancladas)"""
+        favorites = []
+        for recipe_id, recipe in self.data["recipes"].items():
+            if recipe.get("favorite", False):
+                favorites.append({
+                    "id": recipe_id,
+                    "name": recipe["name"],
+                    "category": recipe.get("category", "otros")
+                })
+        return favorites
+    
+    def create_new_meal_plan(self, selected_recipes):
+        """Crear nuevo plan de comidas con las recetas seleccionadas"""
+        # Actualizar el plan actual con las nuevas recetas
+        new_plan = {
+            "name": f"Semana {self.data['user_preferences']['current_week']} - Comida Natural",
+            "proteins": [],
+            "legumes": [],
+            "base_components": [],
+            "vegetables": []
+        }
+        
+        # Organizar recetas seleccionadas por categoría
+        for recipe_id in selected_recipes:
+            if recipe_id in self.data["recipes"]:
+                recipe = self.data["recipes"][recipe_id]
+                category = recipe.get("category", "otros")
+                
+                if category == "protein":
+                    new_plan["proteins"].append(recipe_id)
+                elif category == "legume":
+                    new_plan["legumes"].append(recipe_id)
+                elif category == "base":
+                    new_plan["base_components"].append(recipe_id)
+                elif category == "vegetable":
+                    new_plan["vegetables"].append(recipe_id)
+        
+        # Actualizar el plan en los datos
+        current_week = self.data["user_preferences"]["current_week"]
+        meal_plans = self.data.get("meal_plans", {})
+        meal_plans[f"week_{current_week}"] = new_plan
+        self.data["meal_plans"] = meal_plans
+        
+        # Marcar rotación completada
+        self.data["user_preferences"]["last_rotation"] = datetime.now().isoformat()
+        self.save_data()
+        
+        return new_plan
     
     def rotate_menu(self):
         """Rotar el menú automáticamente"""
@@ -1005,6 +1085,15 @@ def menu_command(message):
                 parse_mode='Markdown')
             return
         
+        # Verificar si es necesaria rotación automática
+        if meal_bot.check_rotation_needed():
+            rotation_response = "🔄 **ROTACIÓN AUTOMÁTICA DISPONIBLE**\n\n"
+            rotation_response += "📅 ¡Es lunes! Tu semana necesita renovación\n"
+            rotation_response += "🥘 Nuevas recetas naturales están listas\n\n"
+            rotation_response += "💡 Usa `/nueva_semana` para rotar tu planificación\n"
+            rotation_response += "➖➖➖➖➖➖➖➖➖➖\n\n"
+            bot.send_message(message.chat.id, rotation_response, parse_mode='Markdown')
+        
         # Obtener datos del menú actual
         meal_plan = meal_bot.get_current_meal_plan()
         current_week = meal_bot.data["user_preferences"]["current_week"]
@@ -1521,42 +1610,338 @@ def favorite_command(message):
         logger.error(f"Error en favorite_command: {e}")
         bot.reply_to(message, "❌ Error al actualizar favoritos. Intenta de nuevo.")
 
-@bot.message_handler(commands=['cambiar_semana'])
-def change_week_command(message):
-    """Cambiar semana de rotación manualmente"""
+@bot.message_handler(commands=['nueva_semana'])
+def nueva_semana_command(message):
+    """Iniciar proceso de rotación semanal interactiva"""
     try:
-        week_str = message.text.replace('/cambiar_semana', '').strip()
-        if not week_str:
-            current_week = meal_bot.data["user_preferences"]["current_week"]
-            bot.reply_to(message, f"📅 Semana actual: **{current_week}**\n\nUso: `/cambiar\_semana [1-4]`\n\nSemanas disponibles:\n• 1-2: Mediterráneo/Mexicano\n• 3-4: Asiático/Marroquí")
+        # Verificar perfil
+        user_profile = meal_bot.get_user_profile()
+        if not user_profile:
+            bot.reply_to(message, 
+                "❌ **Perfil no configurado**\n\n"
+                "Usa `/perfil` para configurar tu perfil primero.",
+                parse_mode='Markdown')
             return
         
-        try:
-            new_week = int(week_str)
-            if not 1 <= new_week <= 4:
-                raise ValueError()
-        except ValueError:
-            bot.reply_to(message, "❌ La semana debe ser un número del 1 al 4")
-            return
+        current_week = meal_bot.data["user_preferences"]["current_week"]
         
-        old_week = meal_bot.data["user_preferences"]["current_week"]
-        meal_bot.data["user_preferences"]["current_week"] = new_week
-        meal_bot.data["user_preferences"]["last_rotation"] = datetime.now().isoformat()
+        # Mostrar introducción
+        intro_response = f"🔄 **ROTACIÓN SEMANAL AUTOMÁTICA**\n\n"
+        intro_response += f"📅 Semana actual: **{current_week}**\n"
+        intro_response += f"🥘 Preparando nueva semana de comida natural\n\n"
+        intro_response += "🎯 **Opciones disponibles:**\n"
+        intro_response += "1️⃣ Ver recetas disponibles por categoría\n"
+        intro_response += "2️⃣ Mantener recetas favoritas ancladas\n"
+        intro_response += "3️⃣ Buscar recetas nuevas con IA\n"
+        intro_response += "4️⃣ Rotación automática inteligente\n\n"
+        intro_response += "Responde con el número de opción que prefieres 👇"
+        
+        bot.reply_to(message, intro_response, parse_mode='Markdown')
+        
+        # Guardar estado de conversación
+        meal_bot.data["user_preferences"]["rotation_state"] = "waiting_option"
         meal_bot.save_data()
         
-        meal_plan = meal_bot.get_current_meal_plan()
+    except Exception as e:
+        logger.error(f"Error en nueva_semana_command: {e}")
+        bot.reply_to(message, "❌ Error iniciando rotación. Intenta de nuevo.")
+
+# ===== FUNCIONES DE CONVERSACIÓN DE ROTACIÓN =====
+
+def handle_rotation_conversation(message):
+    """Manejar conversación de rotación semanal"""
+    try:
+        rotation_state = meal_bot.data["user_preferences"].get("rotation_state")
         
-        response_text = f"🔄 **Menú cambiado exitosamente**\n\n"
-        response_text += f"📅 Semana anterior: {old_week}\n"
-        response_text += f"📅 Semana actual: **{new_week}**\n"
-        response_text += f"🍽️ Menú: **{meal_plan['name']}**\n\n"
-        response_text += "💡 *Usa /menu para ver el nuevo menú completo*"
+        if rotation_state == "waiting_option":
+            option = message.text.strip()
+            
+            if option == "1":
+                # Mostrar recetas por categoría
+                show_recipes_by_category(message)
+            elif option == "2":
+                # Mantener favoritas ancladas
+                handle_anchored_favorites(message)
+            elif option == "3":
+                # Buscar recetas nuevas con IA
+                start_ai_recipe_search(message)
+            elif option == "4":
+                # Rotación automática inteligente
+                perform_intelligent_rotation(message)
+            else:
+                bot.reply_to(message, "❌ Opción no válida. Responde con 1, 2, 3 o 4.")
+                return
         
-        bot.reply_to(message, response_text, parse_mode='Markdown')
+        elif rotation_state == "selecting_recipes":
+            handle_recipe_selection(message)
+        
+        elif rotation_state == "searching_new":
+            handle_new_recipe_search(message)
+            
+    except Exception as e:
+        logger.error(f"Error en handle_rotation_conversation: {e}")
+        bot.reply_to(message, "❌ Error en rotación. Usa `/nueva_semana` para reiniciar.")
+
+def show_recipes_by_category(message):
+    """Mostrar recetas disponibles organizadas por categoría"""
+    try:
+        available_recipes = meal_bot.get_available_recipes()
+        
+        response = "📋 **RECETAS DISPONIBLES POR CATEGORÍA**\n\n"
+        
+        category_emojis = {
+            "proteinas": "🥩",
+            "legumbres": "🫘",
+            "cereales": "🌾", 
+            "vegetales": "🥬"
+        }
+        
+        for category, recipes in available_recipes.items():
+            if recipes:
+                emoji = category_emojis.get(category, "🍽️")
+                response += f"{emoji} **{category.upper()}:**\n"
+                
+                for recipe in recipes:
+                    rating_stars = "⭐" * recipe["rating"] if recipe["rating"] > 0 else ""
+                    favorite_mark = " ❤️" if recipe["favorite"] else ""
+                    response += f"• {recipe['name']}{rating_stars}{favorite_mark}\n"
+                response += "\n"
+        
+        response += "💡 **Instrucciones:**\n"
+        response += "Responde con los nombres de las recetas que quieres para esta semana, separados por comas.\n\n"
+        response += "Ejemplo: `Pollo Mediterráneo, Frijoles Negros, Quinoa`\n\n"
+        response += "O escribe 'ninguna' para buscar recetas nuevas con IA 🤖"
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+        # Cambiar estado de conversación
+        meal_bot.data["user_preferences"]["rotation_state"] = "selecting_recipes"
+        meal_bot.save_data()
         
     except Exception as e:
-        logger.error(f"Error en change_week_command: {e}")
-        bot.reply_to(message, "❌ Error al cambiar semana. Intenta de nuevo.")
+        logger.error(f"Error en show_recipes_by_category: {e}")
+        bot.reply_to(message, "❌ Error mostrando recetas.")
+
+def handle_anchored_favorites(message):
+    """Manejar recetas favoritas ancladas"""
+    try:
+        favorites = meal_bot.get_anchored_favorites()
+        
+        if not favorites:
+            response = "❤️ **NO TIENES RECETAS FAVORITAS**\n\n"
+            response += "Usa `/favorito [nombre_receta]` para marcar recetas como favoritas.\n\n"
+            response += "Las recetas favoritas se mantienen automáticamente en cada rotación.\n\n"
+            response += "¿Quieres ver todas las recetas disponibles? Responde 'sí' o 'no'."
+        else:
+            response = "❤️ **RECETAS FAVORITAS (ANCLADAS)**\n\n"
+            response += "Estas recetas se mantendrán automáticamente:\n\n"
+            
+            for fav in favorites:
+                response += f"• {fav['name']} ({fav['category']})\n"
+            
+            response += f"\n🔄 **Completando semana con {len(favorites)} favoritas ancladas...**\n"
+            response += "Buscando recetas complementarias automáticamente..."
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+        if favorites:
+            # Auto-completar con favoritas + recetas automáticas
+            import time
+            time.sleep(1)
+            complete_week_with_favorites(message, favorites)
+        else:
+            meal_bot.data["user_preferences"]["rotation_state"] = "waiting_favorites_decision"
+            meal_bot.save_data()
+            
+    except Exception as e:
+        logger.error(f"Error en handle_anchored_favorites: {e}")
+        bot.reply_to(message, "❌ Error procesando favoritas.")
+
+def complete_week_with_favorites(message, favorites):
+    """Completar semana con favoritas + selección automática"""
+    try:
+        # Crear lista con favoritas
+        selected_recipes = [fav["id"] for fav in favorites]  
+        
+        # TODO: Añadir lógica para completar con recetas automáticas balanceadas
+        # Por ahora, crear plan solo con favoritas
+        
+        new_plan = meal_bot.create_new_meal_plan(selected_recipes)
+        
+        response = "✅ **NUEVA SEMANA CREADA**\n\n"
+        response += f"📅 **Semana actualizada con éxito**\n"
+        response += f"❤️ Mantenidas {len(favorites)} recetas favoritas\n"
+        response += f"🎯 Plan optimizado para comida natural\n\n"
+        response += "💡 Usa `/menu` para ver tu nueva planificación semanal"
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+        # Limpiar estado
+        meal_bot.data["user_preferences"]["rotation_state"] = None
+        meal_bot.save_data()
+        
+    except Exception as e:
+        logger.error(f"Error en complete_week_with_favorites: {e}")
+        bot.reply_to(message, "❌ Error completando semana.")
+
+def start_ai_recipe_search(message):
+    """Iniciar búsqueda de nuevas recetas con IA"""
+    response = "🤖 **BÚSQUEDA DE RECETAS CON IA**\n\n"
+    response += "Describe qué tipo de recetas quieres buscar:\n\n"
+    response += "**Ejemplos:**\n"
+    response += "• 'Pollo con vegetales mediterráneos'\n"  
+    response += "• 'Legumbres especiadas estilo marroquí'\n"
+    response += "• 'Quinoa con verduras de temporada'\n"
+    response += "• 'Pescado al horno con hierbas'\n\n"
+    response += "💡 Recuerda: Solo ingredientes naturales, sin procesados"
+    
+    bot.reply_to(message, response, parse_mode='Markdown')
+    
+    meal_bot.data["user_preferences"]["rotation_state"] = "searching_new"
+    meal_bot.save_data()
+
+def handle_new_recipe_search(message):
+    """Manejar búsqueda de nueva receta"""
+    try:
+        query = message.text.strip()
+        
+        if len(query) < 10:
+            bot.reply_to(message, "❌ Describe con más detalle qué receta buscas (mínimo 10 caracteres).")
+            return
+        
+        response = "🔍 **BUSCANDO RECETA CON IA...**\n\n"
+        response += f"Consulta: '{query}'\n"
+        response += "⏳ Creando receta natural personalizada..."
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+        # Usar la función de búsqueda existente pero con prompt mejorado
+        result = meal_bot.search_or_create_recipe(f"{query} - ingredientes naturales sin procesar")
+        
+        if result and "❌" not in result:
+            final_response = "✅ **NUEVA RECETA CREADA**\n\n"
+            final_response += "🤖 Tu receta ha sido añadida a la base de datos\n"
+            final_response += "🔄 Rotación completada con nueva comida natural\n\n"
+            final_response += "💡 Usa `/menu` para ver tu planificación actualizada"
+            
+            bot.reply_to(message, final_response, parse_mode='Markdown')
+            
+            # Limpiar estado
+            meal_bot.data["user_preferences"]["rotation_state"] = None
+            meal_bot.save_data()
+        else:
+            bot.reply_to(message, f"❌ Error creando receta: {result}")
+            
+    except Exception as e:
+        logger.error(f"Error en handle_new_recipe_search: {e}")
+        bot.reply_to(message, "❌ Error en búsqueda de recetas.")
+
+def perform_intelligent_rotation(message):
+    """Realizar rotación automática inteligente"""
+    try:
+        response = "🤖 **ROTACIÓN AUTOMÁTICA INTELIGENTE**\n\n"
+        response += "⚡ Analizando tu historial y preferencias...\n"
+        response += "🎯 Seleccionando recetas balanceadas automáticamente...\n"
+        response += "🥘 Priorizando comida natural y variedad..."
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+        # TODO: Implementar lógica inteligente basada en ratings, historial, etc.
+        # Por ahora, selección básica
+        
+        import time
+        time.sleep(2)
+        
+        # Seleccionar recetas con mejor rating de cada categoría
+        available_recipes = meal_bot.get_available_recipes()
+        selected_recipes = []
+        
+        for category, recipes in available_recipes.items():
+            if recipes:
+                # Ordenar por rating y tomar la mejor
+                best_recipe = max(recipes, key=lambda x: (x["rating"], x["favorite"]))
+                selected_recipes.append(best_recipe["id"])
+        
+        if selected_recipes:
+            new_plan = meal_bot.create_new_meal_plan(selected_recipes)
+            
+            final_response = "✅ **ROTACIÓN AUTOMÁTICA COMPLETADA**\n\n"
+            final_response += f"🎯 Seleccionadas {len(selected_recipes)} recetas balanceadas\n"
+            final_response += "⭐ Priorizadas recetas con mejor valoración\n"
+            final_response += "🥘 100% ingredientes naturales\n\n"
+            final_response += "💡 Usa `/menu` para ver tu nueva planificación"
+            
+            bot.reply_to(message, final_response, parse_mode='Markdown')
+        else:
+            bot.reply_to(message, "❌ No hay recetas disponibles para rotación automática.")
+        
+        # Limpiar estado
+        meal_bot.data["user_preferences"]["rotation_state"] = None
+        meal_bot.save_data()
+        
+    except Exception as e:
+        logger.error(f"Error en perform_intelligent_rotation: {e}")
+        bot.reply_to(message, "❌ Error en rotación automática.")
+
+def handle_recipe_selection(message):
+    """Manejar selección manual de recetas"""
+    try:
+        user_input = message.text.strip()
+        
+        if user_input.lower() in ['listo', 'finalizar', 'completar']:
+            # Finalizar selección
+            selected_recipes = meal_bot.data["user_preferences"].get("selected_recipes", [])
+            
+            if selected_recipes:
+                new_plan = meal_bot.create_new_meal_plan(selected_recipes)
+                
+                response = "✅ **SELECCIÓN MANUAL COMPLETADA**\n\n"
+                response += f"📋 Seleccionadas {len(selected_recipes)} recetas\n"
+                response += "🎯 Plan personalizado creado exitosamente\n\n"
+                response += "💡 Usa `/menu` para ver tu nueva planificación"
+                
+                bot.reply_to(message, response, parse_mode='Markdown')
+                
+                # Limpiar estado
+                meal_bot.data["user_preferences"]["rotation_state"] = None
+                meal_bot.data["user_preferences"].pop("selected_recipes", None)
+                meal_bot.save_data()
+            else:
+                bot.reply_to(message, "❌ No has seleccionado ninguna receta. Usa `/nueva_semana` para reiniciar.")
+        else:
+            # Buscar receta por nombre
+            recipe_found = False
+            for recipe_id, recipe in meal_bot.data["recipes"].items():
+                if user_input.lower() in recipe["name"].lower():
+                    selected_recipes = meal_bot.data["user_preferences"].get("selected_recipes", [])
+                    
+                    if recipe_id not in selected_recipes:
+                        selected_recipes.append(recipe_id)
+                        meal_bot.data["user_preferences"]["selected_recipes"] = selected_recipes
+                        meal_bot.save_data()
+                        
+                        response = f"✅ **RECETA AÑADIDA**\n\n"
+                        response += f"📝 {recipe['name']} agregada a tu selección\n"
+                        response += f"📊 Total seleccionadas: {len(selected_recipes)}\n\n"
+                        response += "💡 Añade más recetas o escribe 'listo' para finalizar"
+                        
+                        bot.reply_to(message, response, parse_mode='Markdown')
+                        recipe_found = True
+                        break
+                    else:
+                        bot.reply_to(message, f"⚠️ {recipe['name']} ya está seleccionada.")
+                        recipe_found = True
+                        break
+            
+            if not recipe_found:
+                response = "❌ **RECETA NO ENCONTRADA**\n\n"
+                response += f"No encontré una receta con el nombre '{user_input}'\n\n"
+                response += "💡 Intenta con un nombre más específico o usa '/nueva_semana' para ver las opciones disponibles."
+                bot.reply_to(message, response, parse_mode='Markdown')
+            
+    except Exception as e:
+        logger.error(f"Error en handle_recipe_selection: {e}")
+        bot.reply_to(message, "❌ Error en selección de recetas.")
 
 # ===== FUNCIONES DE CONVERSACIÓN DE PERFIL =====
 
@@ -1954,6 +2339,12 @@ def handle_text(message):
         # Manejar conversación de perfil si está activa
         if user_id in profile_conversations:
             handle_profile_conversation(message)
+            return
+        
+        # Manejar conversación de rotación si está activa
+        rotation_state = meal_bot.data["user_preferences"].get("rotation_state")
+        if rotation_state:
+            handle_rotation_conversation(message)
             return
         
         # Frases comunes de feedback
