@@ -992,47 +992,88 @@ También puedes escribirme en lenguaje natural como:
     """
     bot.reply_to(message, welcome_text, parse_mode='Markdown')
 
-@bot.message_handler(commands=['menu', 'menu_semana'])
+@bot.message_handler(commands=['menu'])
 def menu_command(message):
-    """Mostrar menú de la semana actual"""
+    """Mostrar menú semanal completo (L-V) con porciones, macros y divisiones"""
     try:
+        # Verificar perfil
+        user_profile = meal_bot.get_user_profile()
+        if not user_profile:
+            bot.reply_to(message, 
+                "❌ **Perfil no configurado**\n\n"
+                "Usa `/perfil` para configurar tu perfil primero.",
+                parse_mode='Markdown')
+            return
+        
+        # Obtener datos del menú actual
         meal_plan = meal_bot.get_current_meal_plan()
         current_week = meal_bot.data["user_preferences"]["current_week"]
-        macros = meal_bot.calculate_daily_macros()
-        targets = meal_bot.data["user_preferences"]["macro_targets"]
+        portions_data = meal_bot.calculate_personal_portions()
+        cooking_data = meal_bot.calculate_cooking_amounts()
         
-        menu_text = f"🍽️ **MENÚ SEMANA {current_week}-{current_week+1 if current_week in [1,3] else current_week-1}**\n"
-        menu_text += f"*{meal_plan['name']}*\n\n"
+        if not portions_data or not cooking_data:
+            bot.reply_to(message, "❌ Error calculando datos del menú. Intenta de nuevo.")
+            return
         
-        menu_text += "**🥩 PROTEÍNAS:**\n"
-        for protein_id in meal_plan["proteins"]:
-            recipe = meal_bot.get_recipe_by_id(protein_id)
-            if recipe:
-                menu_text += f"• {recipe['name']}\n"
+        # Mensaje inicial
+        response = f"📅 **MENÚ SEMANAL (LUNES - VIERNES)**\n"
+        response += f"🗓️ Semana {current_week} • Comida Natural\n\n"
         
-        menu_text += "\n**🫘 LEGUMBRES:**\n"
-        for legume_id in meal_plan["legumes"]:
-            recipe = meal_bot.get_recipe_by_id(legume_id)
-            if recipe:
-                menu_text += f"• {recipe['name']}\n"
+        # Macros diarios objetivo
+        daily_macros = portions_data['daily_macros']
+        response += f"🎯 **MACROS DIARIOS OBJETIVO:**\n"
+        response += f"• {daily_macros['calories']} kcal | {daily_macros['protein']}g proteína\n"
+        response += f"• {daily_macros['carbs']}g carbos | {daily_macros['fat']}g grasas\n"
+        response += f"• Distribuido en {portions_data['num_comidas']} comidas\n\n"
         
-        menu_text += "\n**🌾 COMPONENTES BASE:**\n"
-        for base_id in meal_plan["base_components"]:
-            recipe = meal_bot.get_recipe_by_id(base_id)
-            if recipe:
-                menu_text += f"• {recipe['name']}\n"
+        bot.reply_to(message, response, parse_mode='Markdown')
         
-        menu_text += f"\n**📊 MACROS DIARIOS:**\n"
-        menu_text += f"• Proteína: {macros['protein']:.0f}g (objetivo: {targets['protein']}g)\n"
-        menu_text += f"• Carbohidratos: {macros['carbs']:.0f}g (objetivo: {targets['carbs']}g)\n"
-        menu_text += f"• Grasas: {macros['fat']:.0f}g (objetivo: {targets['fat']}g)\n"
-        menu_text += f"• Calorías: {macros['calories']:.0f} (objetivo: {targets['calories']})\n"
+        # Enviar planificación por día
+        import time
+        days = ["LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES"]
         
-        # Verificar si necesita rotación
-        if meal_bot.check_rotation_needed():
-            menu_text += "\n🔄 *Es momento de rotar el menú. Usa /cambiar\_semana para cambiar.*"
+        for day in days:
+            day_response = f"📋 **{day}**\n\n"
+            day_response += "🍽️ **COMIDAS DEL DÍA:**\n"
+            
+            # Mostrar porciones por comida para cada receta
+            for recipe_id, portion_info in portions_data['portions_needed'].items():
+                if recipe_id in meal_bot.data["recipes"]:
+                    recipe = meal_bot.data["recipes"][recipe_id]
+                    portions_per_meal = portion_info['portions_per_meal']
+                    
+                    day_response += f"• **{recipe['name']}:** {portions_per_meal:.2f} porciones/comida\n"
+            
+            # Información de macros por día
+            day_response += f"\n📊 **MACROS TOTALES DEL DÍA:**\n"
+            day_response += f"• {daily_macros['calories']} kcal • {daily_macros['protein']}g prot\n"
+            day_response += f"• {daily_macros['carbs']}g carbs • {daily_macros['fat']}g grasas\n"
+            
+            bot.send_message(message.chat.id, day_response, parse_mode='Markdown')
+            time.sleep(0.8)
         
-        bot.reply_to(message, menu_text, parse_mode='Markdown')
+        # Sección de divisiones (cómo dividir lo cocinado)
+        divisions_response = "✂️ **CÓMO DIVIDIR LOS ALIMENTOS COCINADOS**\n\n"
+        
+        for recipe_id, amounts in cooking_data['cooking_amounts'].items():
+            if recipe_id in meal_bot.data["recipes"]:
+                recipe = meal_bot.data["recipes"][recipe_id]
+                weekly_portions = amounts['weekly_portions_needed']
+                daily_portions = amounts['daily_portions']
+                
+                divisions_response += f"**{recipe['name']}:**\n"
+                divisions_response += f"• Total semanal: {weekly_portions:.1f} porciones\n"
+                divisions_response += f"• Por día: {daily_portions:.1f} porciones\n"
+                divisions_response += f"• Dividir en: {int(weekly_portions)} contenedores\n\n"
+        
+        divisions_response += "💡 **INSTRUCCIONES:**\n"
+        divisions_response += "1. Cocina todo según cantidades de `/compras`\n"
+        divisions_response += "2. Divide cada receta en los contenedores indicados\n"
+        divisions_response += "3. Cada contenedor = 1 porción para 1 comida\n"
+        divisions_response += "4. Combina porciones según el plan diario\n\n"
+        divisions_response += "🔄 **Próxima rotación:** Automática cada lunes"
+        
+        bot.send_message(message.chat.id, divisions_response, parse_mode='Markdown')
         
     except Exception as e:
         logger.error(f"Error en menu_command: {e}")
@@ -1122,74 +1163,197 @@ def search_command(message):
         logger.error(f"Error en search_command: {e}")
         bot.reply_to(message, f"❌ Error al buscar recetas: {str(e)}")
 
-@bot.message_handler(commands=['compras', 'lista_compras'])
-def shopping_command(message):
-    """Generar lista de compra"""
+@bot.message_handler(commands=['compras'])
+def compras_command(message):
+    """Generar lista de compras simplificada sin categorías"""
     try:
-        shopping_list = meal_bot.generate_shopping_list()
+        # Verificar perfil
+        user_profile = meal_bot.get_user_profile()
+        if not user_profile:
+            bot.reply_to(message, 
+                "❌ **Perfil no configurado**\n\n"
+                "Usa `/perfil` para configurar tu perfil primero.",
+                parse_mode='Markdown')
+            return
+        
+        # Calcular cantidades de cocina
+        cooking_data = meal_bot.calculate_cooking_amounts()
+        if not cooking_data:
+            bot.reply_to(message, "❌ Error calculando cantidades. Intenta de nuevo.")
+            return
+        
+        # Recopilar todos los ingredientes para Claude
+        all_ingredients = []
+        for recipe_id, amounts in cooking_data['cooking_amounts'].items():
+            if recipe_id in meal_bot.data["recipes"]:
+                recipe = meal_bot.data["recipes"][recipe_id]
+                multiplier = amounts['recipe_multiplier']
+                
+                for ingredient in recipe["ingredients"]:
+                    all_ingredients.append({
+                        'ingredient': ingredient,
+                        'multiplier': multiplier,
+                        'category': 'otros'
+                    })
+        
+        # Procesar con Claude para agregar y estandarizar
+        claude_result = meal_bot.process_ingredients_with_claude(all_ingredients)
+        
+        if claude_result and claude_result.get("success"):
+            # Usar resultado de Claude - unificar todas las categorías
+            unified_ingredients = []
+            for category_ingredients in claude_result["ingredients_by_category"].values():
+                unified_ingredients.extend(category_ingredients)
+        else:
+            # Fallback: usar sistema anterior pero sin categorías
+            logger.warning("Claude falló, usando sistema de fallback para /compras")
+            aggregated_ingredients = meal_bot.aggregate_ingredients(all_ingredients)
+            
+            unified_ingredients = []
+            if aggregated_ingredients:
+                for ingredient_data in aggregated_ingredients.values():
+                    formatted = meal_bot.format_ingredient(ingredient_data)
+                    unified_ingredients.append(formatted)
+            else:
+                # Último recurso: ingredientes sin procesar
+                for item in all_ingredients:
+                    ingredient_with_mult = f"{item['ingredient']} ×{item['multiplier']:.1f}"
+                    unified_ingredients.append(ingredient_with_mult)
+        
+        # Crear lista de compras unificada
         current_week = meal_bot.data["user_preferences"]["current_week"]
         
-        shopping_text = f"🛒 **LISTA DE COMPRAS - SEMANA {current_week}**\n\n"
+        response = f"🛒 **LISTA DE COMPRAS SEMANAL**\n"
+        response += f"📅 Semana {current_week} • Comida Natural\n\n"
         
-        category_icons = {
-            "proteinas": "🥩",
-            "legumbres": "🫘", 
-            "cereales": "🌾",
-            "vegetales": "🥬",
-            "especias": "🧂",
-            "lacteos": "🥛",
-            "otros": "📦"
+        # Ordenar alfabéticamente para facilitar las compras
+        for ingredient in sorted(unified_ingredients):
+            response += f"• {ingredient}\n"
+        
+        response += f"\n📊 **TOTAL:** {len(unified_ingredients)} ingredientes\n"
+        response += "💡 **Para 5 días de comida natural (L-V)**\n"
+        response += "🔄 Lista actualizada cada lunes automáticamente"
+        
+        # Guardar en historial
+        from datetime import datetime
+        meal_bot.data["shopping_lists"][datetime.now().isoformat()[:10]] = {
+            "ingredients": unified_ingredients,
+            "week": current_week,
+            "total_items": len(unified_ingredients)
         }
-        
-        for category, items in shopping_list.items():
-            if items:
-                icon = category_icons.get(category, "•")
-                shopping_text += f"**{icon} {category.upper()}:**\n"
-                for item in items:
-                    shopping_text += f"☐ {item}\n"
-                shopping_text += "\n"
-        
-        shopping_text += "💡 *Lista generada para toda la semana de meal prep*"
-        
-        # Guardar lista en historial
-        meal_bot.data["shopping_lists"][datetime.now().isoformat()[:10]] = shopping_list
         meal_bot.save_data()
         
-        bot.reply_to(message, shopping_text, parse_mode='Markdown')
+        bot.reply_to(message, response, parse_mode='Markdown')
         
     except Exception as e:
-        logger.error(f"Error en shopping_command: {e}")
-        bot.reply_to(message, "❌ Error al generar lista de compras. Intenta de nuevo.")
+        logger.error(f"Error en compras_command: {e}")
+        bot.reply_to(message, "❌ Error generando lista de compras. Intenta de nuevo.")
 
 @bot.message_handler(commands=['cronograma'])
-def schedule_command(message):
-    """Mostrar cronograma de cocción"""
+def cronograma_command(message):
+    """Mostrar cronograma híbrido de cocción (batch + fresco)"""
     try:
-        schedule = meal_bot.generate_cooking_schedule()
+        # Verificar perfil
+        user_profile = meal_bot.get_user_profile()
+        if not user_profile:
+            bot.reply_to(message, 
+                "❌ **Perfil no configurado**\n\n"
+                "Usa `/perfil` para configurar tu perfil primero.",
+                parse_mode='Markdown')
+            return
         
-        schedule_text = "⏰ **CRONOGRAMA DE COCCIÓN**\n\n"
+        # Obtener datos de cocina
+        cooking_data = meal_bot.calculate_cooking_amounts()
+        if not cooking_data:
+            bot.reply_to(message, "❌ Error calculando cronograma. Intenta de nuevo.")
+            return
         
-        schedule_text += "**🍳 SÁBADO:**\n"
-        for i, item in enumerate(schedule["saturday"], 1):
-            schedule_text += f"{i}. **{item['name']}**\n"
-            schedule_text += f"   ⏱️ {item['cook_time']}\n\n"
+        current_week = meal_bot.data["user_preferences"]["current_week"]
         
-        schedule_text += "**👨‍🍳 DOMINGO:**\n"
-        for i, item in enumerate(schedule["sunday"], 1):
-            schedule_text += f"{i}. **{item['name']}**\n"
-            schedule_text += f"   ⏱️ {item['cook_time']}\n"
-            if item.get("method"):
-                schedule_text += f"   🔥 Método: {item['method']}\n"
-            schedule_text += "\n"
+        # Mensaje inicial
+        response = f"⏰ **CRONOGRAMA HÍBRIDO DE COCINA**\n"
+        response += f"📅 Semana {current_week} • Comida Natural\n\n"
+        response += "🥘 **ESTRATEGIA:** Batch cooking + Fresco diario\n\n"
         
-        schedule_text += "💡 *Optimizado para una Crockpot de 12L*\n"
-        schedule_text += "📝 *Lava la Crockpot entre tandas para mejores resultados*"
+        bot.reply_to(message, response, parse_mode='Markdown')
         
-        bot.reply_to(message, schedule_text, parse_mode='Markdown')
+        # Clasificar recetas por complejidad
+        import time
+        batch_recipes = []
+        fresh_recipes = []
+        
+        for recipe_id, amounts in cooking_data['cooking_amounts'].items():
+            if recipe_id in meal_bot.data["recipes"]:
+                recipe = meal_bot.data["recipes"][recipe_id]
+                
+                # Determinar si es batch cooking o fresco
+                # (Por ahora, clasificación simple - se puede mejorar con utensilios de usuario)
+                cook_time = recipe.get("cook_time", "")
+                
+                if any(keyword in cook_time.lower() for keyword in ["horas", "hour", "crockpot", "horno"]) or \
+                   any(keyword in recipe["name"].lower() for keyword in ["guisado", "estofado", "cocido"]):
+                    batch_recipes.append((recipe, amounts))
+                else:
+                    fresh_recipes.append((recipe, amounts))
+        
+        # Mostrar batch cooking (fin de semana)
+        batch_response = "👨‍🍳 **BATCH COOKING (DOMINGO)**\n"
+        batch_response += "*Recetas complejas para preparar de una vez*\n\n"
+        
+        if batch_recipes:
+            for recipe, amounts in batch_recipes:
+                weekly_portions = amounts['weekly_portions_needed']
+                batch_response += f"🍲 **{recipe['name']}**\n"
+                batch_response += f"• Tiempo: {recipe.get('cook_time', 'Variable')}\n"
+                batch_response += f"• Producir: {weekly_portions:.1f} porciones para toda la semana\n"
+                batch_response += f"• Método: {recipe.get('method', 'Según receta')}\n\n"
+        else:
+            batch_response += "No hay recetas complejas esta semana 👍\n\n"
+        
+        batch_response += "💡 Divide en contenedores y refrigera/congela"
+        
+        bot.send_message(message.chat.id, batch_response, parse_mode='Markdown')
+        time.sleep(1)
+        
+        # Mostrar cocina fresca diaria
+        fresh_response = "🥗 **COCINA FRESCA (DIARIO)**\n"
+        fresh_response += "*Recetas simples para preparar en el momento*\n\n"
+        
+        if fresh_recipes:
+            for recipe, amounts in fresh_recipes:
+                daily_portions = amounts['daily_portions']
+                fresh_response += f"🍽️ **{recipe['name']}**\n"
+                fresh_response += f"• Preparar: {daily_portions:.1f} porciones diarias\n"
+                fresh_response += f"• Tiempo: {recipe.get('cook_time', '15-30 min')}\n"
+                fresh_response += f"• Momento: Antes de cada comida\n\n"
+        else:
+            fresh_response += "Todas las recetas son batch cooking esta semana 🍲\n\n"
+        
+        fresh_response += "⚡ Rápido, fresco y nutritivo"
+        
+        bot.send_message(message.chat.id, fresh_response, parse_mode='Markdown')
+        time.sleep(1)
+        
+        # Cronograma semanal sugerido
+        schedule_response = "📅 **CRONOGRAMA SEMANAL SUGERIDO**\n\n"
+        schedule_response += "**DOMINGO:**\n"
+        schedule_response += "• 🥘 Batch cooking (recetas complejas)\n"
+        schedule_response += "• ⏰ 2-4 horas de cocina total\n"
+        schedule_response += "• 📦 Dividir y almacenar\n\n"
+        schedule_response += "**LUNES-VIERNES:**\n"
+        schedule_response += "• 🔥 Calentar batch cooking\n"
+        schedule_response += "• 🥗 Preparar recetas frescas (15-30 min)\n"
+        schedule_response += "• ✨ Combinar según plan del `/menu`\n\n"
+        schedule_response += "**SÁBADO:**\n"
+        schedule_response += "• 🛒 Compras según `/compras`\n"
+        schedule_response += "• 📋 Planificar domingo de cocina\n\n"
+        schedule_response += "🔄 **Próxima rotación:** Lunes automático"
+        
+        bot.send_message(message.chat.id, schedule_response, parse_mode='Markdown')
         
     except Exception as e:
-        logger.error(f"Error en schedule_command: {e}")
-        bot.reply_to(message, "❌ Error al generar cronograma. Intenta de nuevo.")
+        logger.error(f"Error en cronograma_command: {e}")
+        bot.reply_to(message, "❌ Error generando cronograma. Intenta de nuevo.")
 
 @bot.message_handler(commands=['macros'])
 def macros_command(message):
