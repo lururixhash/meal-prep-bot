@@ -37,10 +37,12 @@ logger = logging.getLogger(__name__)
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 app = Flask(__name__)
 try:
+    logger.info(f"🔑 ANTHROPIC_API_KEY configurada: {ANTHROPIC_API_KEY is not None and len(ANTHROPIC_API_KEY or '') > 0}")
     claude_client = Anthropic(api_key=ANTHROPIC_API_KEY)
-    logger.info("Claude client initialized successfully")
+    logger.info("✅ Claude client initialized successfully")
 except Exception as e:
-    logger.error(f"Error initializing Claude client: {e}")
+    logger.error(f"❌ Error initializing Claude client: {e}")
+    logger.error(f"🔍 ANTHROPIC_API_KEY length: {len(ANTHROPIC_API_KEY or '')}")
     claude_client = None
 
 class MealPrepBot:
@@ -1203,8 +1205,15 @@ def personal_shopping_command(message):
         
         logger.info(f"Procesando {len(all_ingredients)} ingredientes con Claude API...")
         
+        # Verificar estado de Claude client
+        logger.info(f"🔍 Estado de claude_client: {claude_client is not None}")
+        if claude_client is None:
+            logger.error("⚠️ PROBLEMA: claude_client es None - no se puede usar Claude API")
+        
         # Procesar ingredientes con Claude
+        logger.info("🚀 Llamando a process_ingredients_with_claude()...")
         claude_result = meal_bot.process_ingredients_with_claude(all_ingredients)
+        logger.info(f"📝 Resultado de Claude: {claude_result is not None} - {type(claude_result)}")
         
         if claude_result and claude_result.get("success"):
             # Usar el resultado de Claude
