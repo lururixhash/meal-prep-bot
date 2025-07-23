@@ -496,6 +496,92 @@ RESPUESTA (SOLO JSON):
         
         return recipes_by_category
     
+    def get_available_complements(self):
+        """Obtener todos los complementos naturales organizados por categoría"""
+        complements = self.data.get("complementos_naturales", {})
+        available_complements = {}
+        
+        for category, items in complements.items():
+            available_complements[category] = []
+            for item_id, item in items.items():
+                available_complements[category].append({
+                    "id": item_id,
+                    "name": item["name"],
+                    "portion_size": item["portion_size"],
+                    "unit": item["unit"],
+                    "calories": item["macros_per_portion"]["calories"],
+                    "benefits": item.get("benefits", []),
+                    "seasonal": item.get("seasonal", False),
+                    "origin": item.get("mediterranean_origin", "")
+                })
+        
+        return available_complements
+    
+    def get_daily_complements_suggestion(self):
+        """Sugerir complementos diarios balanceados"""
+        complements = self.get_available_complements()
+        suggestions = {
+            "desayuno": [],
+            "media_mañana": [],
+            "media_tarde": []
+        }
+        
+        # Importar random para variedad
+        import random
+        
+        # Desayuno: Lácteo + fruta/miel + fruto seco
+        if "lacteos_naturales" in complements and complements["lacteos_naturales"]:
+            suggestions["desayuno"].append(random.choice(complements["lacteos_naturales"]))
+        
+        if "otros_naturales" in complements and complements["otros_naturales"]:
+            miel = [item for item in complements["otros_naturales"] if "miel" in item["id"]]
+            if miel:
+                suggestions["desayuno"].append(miel[0])
+        
+        if "frutos_secos" in complements and complements["frutos_secos"]:
+            suggestions["desayuno"].append(random.choice(complements["frutos_secos"]))
+        
+        # Media mañana: Fruta + fruto seco o queso
+        if "frutas_frescas" in complements and complements["frutas_frescas"]:
+            suggestions["media_mañana"].append(random.choice(complements["frutas_frescas"]))
+        
+        if "frutos_secos" in complements and complements["frutos_secos"]:
+            suggestions["media_mañana"].append(random.choice(complements["frutos_secos"]))
+        
+        # Media tarde: Aceitunas + queso o fruta seca
+        if "aceitunas_encurtidos" in complements and complements["aceitunas_encurtidos"]:
+            suggestions["media_tarde"].append(random.choice(complements["aceitunas_encurtidos"]))
+        
+        if "lacteos_naturales" in complements and complements["lacteos_naturales"]:
+            quesos = [item for item in complements["lacteos_naturales"] if "queso" in item["id"]]
+            if quesos:
+                suggestions["media_tarde"].append(random.choice(quesos))
+        
+        return suggestions
+    
+    def calculate_complements_macros(self, selected_complements):
+        """Calcular macros totales de complementos seleccionados"""
+        total_macros = {"protein": 0, "carbs": 0, "fat": 0, "calories": 0}
+        complements_data = self.data.get("complementos_naturales", {})
+        
+        for complement_id in selected_complements:
+            # Buscar en todas las categorías
+            found = False
+            for category, items in complements_data.items():
+                if complement_id in items:
+                    macros = items[complement_id]["macros_per_portion"]
+                    total_macros["protein"] += macros["protein"]
+                    total_macros["carbs"] += macros["carbs"]
+                    total_macros["fat"] += macros["fat"]
+                    total_macros["calories"] += macros["calories"]
+                    found = True
+                    break
+            
+            if not found:
+                logger.warning(f"Complemento {complement_id} no encontrado en base de datos")
+        
+        return total_macros
+    
     def get_anchored_favorites(self):
         """Obtener recetas marcadas como favoritas (ancladas)"""
         favorites = []
@@ -1050,13 +1136,12 @@ Soy tu asistente personal para meal prep con batch cooking. Te ayudo a:
 /recetas - Ver todas las recetas
 /buscar [consulta] - Buscar o crear recetas con IA
 
-**🎯 MEAL PREP PERSONALIZADO:**
-/meal\_prep - Calcular porciones por comida
-/compras\_personales - Lista ajustada a tus macros
-/divisiones - Cómo dividir alimentos cocinados
+**🥜 COMPLEMENTOS MEDITERRÁNEOS:**
+/complementos - Ver alimentos simples naturales
+/nueva\_semana - Rotación semanal con complementos
 
 **📊 GESTIÓN:**
-/compras - Lista de compra estándar
+/compras - Lista de compra con complementos
 /cronograma - Ver cronograma de cocción
 /macros - Ver resumen de macros
 /rating [receta] [1-5] [comentario] - Calificar receta
@@ -1133,10 +1218,47 @@ def menu_command(message):
                     
                     day_response += f"• **{recipe['name']}:** {portions_per_meal:.2f} porciones/comida\n"
             
-            # Información de macros por día
+            # Añadir complementos mediterráneos si están configurados
+            weekly_complements = meal_bot.data["user_preferences"].get("weekly_complements", [])
+            if weekly_complements:
+                day_response += f"\n🥜 **COMPLEMENTOS MEDITERRÁNEOS:**\n"
+                
+                # Obtener sugerencias diarias de complementos
+                daily_suggestions = meal_bot.get_daily_complements_suggestion()
+                
+                timing_emojis = {
+                    "desayuno": "🌅",
+                    "media_mañana": "☀️", 
+                    "media_tarde": "🌇"
+                }
+                
+                for timing, items in daily_suggestions.items():
+                    if items:
+                        emoji = timing_emojis.get(timing, "🕐")
+                        timing_name = timing.replace("_", " ").title()
+                        combo_names = [item['name'] for item in items[:2]]  # Máximo 2 items
+                        day_response += f"{emoji} {timing_name}: {' + '.join(combo_names)}\n"
+            
+            # Información de macros por día (incluyendo complementos si existen)
+            total_calories = daily_macros['calories']
+            total_protein = daily_macros['protein']
+            total_carbs = daily_macros['carbs']
+            total_fat = daily_macros['fat']
+            
+            if weekly_complements:
+                # Añadir macros de complementos
+                complements_macros = meal_bot.calculate_complements_macros(weekly_complements)
+                total_calories += complements_macros['calories']
+                total_protein += complements_macros['protein']
+                total_carbs += complements_macros['carbs']
+                total_fat += complements_macros['fat']
+            
             day_response += f"\n📊 **MACROS TOTALES DEL DÍA:**\n"
-            day_response += f"• {daily_macros['calories']} kcal • {daily_macros['protein']}g prot\n"
-            day_response += f"• {daily_macros['carbs']}g carbs • {daily_macros['fat']}g grasas\n"
+            day_response += f"• {total_calories} kcal • {total_protein}g prot\n"
+            day_response += f"• {total_carbs}g carbs • {total_fat}g grasas\n"
+            
+            if weekly_complements:
+                day_response += f"*Incluye complementos mediterráneos naturales*\n"
             
             bot.send_message(message.chat.id, day_response, parse_mode='Markdown')
             time.sleep(0.8)
@@ -1285,6 +1407,29 @@ def compras_command(message):
                         'category': 'otros'
                     })
         
+        # Añadir complementos naturales si están configurados
+        weekly_complements = meal_bot.data["user_preferences"].get("weekly_complements", [])
+        complement_ingredients = []
+        
+        if weekly_complements:
+            complements_data = meal_bot.data.get("complementos_naturales", {})
+            
+            for complement_id in weekly_complements:
+                # Buscar el complemento en todas las categorías
+                for category, items in complements_data.items():
+                    if complement_id in items:
+                        item = items[complement_id]
+                        
+                        # Calcular cantidad semanal (5 días × porción)
+                        portion_size = item["portion_size"]
+                        unit = item["unit"]
+                        weekly_amount = portion_size * 5  # 5 días
+                        
+                        # Formatear ingrediente para compras
+                        complement_ingredient = f"{weekly_amount}{unit} {item['name']}"
+                        complement_ingredients.append(complement_ingredient)
+                        break
+        
         # Procesar con Claude para agregar y estandarizar
         claude_result = meal_bot.process_ingredients_with_claude(all_ingredients)
         
@@ -1315,20 +1460,34 @@ def compras_command(message):
         response = f"🛒 **LISTA DE COMPRAS SEMANAL**\n"
         response += f"📅 Semana {current_week} • Comida Natural\n\n"
         
-        # Ordenar alfabéticamente para facilitar las compras
-        for ingredient in sorted(unified_ingredients):
-            response += f"• {ingredient}\n"
+        # Sección de ingredientes principales (recetas)
+        if unified_ingredients:
+            response += "🍽️ **INGREDIENTES PRINCIPALES:**\n"
+            for ingredient in sorted(unified_ingredients):
+                response += f"• {ingredient}\n"
         
-        response += f"\n📊 **TOTAL:** {len(unified_ingredients)} ingredientes\n"
-        response += "💡 **Para 5 días de comida natural (L-V)**\n"
+        # Sección de complementos mediterráneos
+        if complement_ingredients:
+            response += f"\n🥜 **COMPLEMENTOS MEDITERRÁNEOS:**\n"
+            for complement in sorted(complement_ingredients):
+                response += f"• {complement}\n"
+        
+        total_items = len(unified_ingredients) + len(complement_ingredients)
+        response += f"\n📊 **TOTAL:** {total_items} ingredientes"
+        
+        if complement_ingredients:
+            response += f" ({len(unified_ingredients)} principales + {len(complement_ingredients)} complementos)"
+        
+        response += "\n💡 **Para 5 días de comida natural (L-V)**\n"
         response += "🔄 Lista actualizada cada lunes automáticamente"
         
         # Guardar en historial
         from datetime import datetime
         meal_bot.data["shopping_lists"][datetime.now().isoformat()[:10]] = {
             "ingredients": unified_ingredients,
+            "complements": complement_ingredients,
             "week": current_week,
-            "total_items": len(unified_ingredients)
+            "total_items": total_items
         }
         meal_bot.save_data()
         
@@ -1610,6 +1769,92 @@ def favorite_command(message):
         logger.error(f"Error en favorite_command: {e}")
         bot.reply_to(message, "❌ Error al actualizar favoritos. Intenta de nuevo.")
 
+@bot.message_handler(commands=['complementos'])
+def complementos_command(message):
+    """Mostrar complementos naturales mediterráneos disponibles"""
+    try:
+        # Verificar perfil
+        user_profile = meal_bot.get_user_profile()
+        if not user_profile:
+            bot.reply_to(message, 
+                "❌ **Perfil no configurado**\n\n"
+                "Usa `/perfil` para configurar tu perfil primero.",
+                parse_mode='Markdown')
+            return
+        
+        # Obtener complementos disponibles
+        complements = meal_bot.get_available_complements()
+        suggestions = meal_bot.get_daily_complements_suggestion()
+        
+        response = "🥜 **COMPLEMENTOS NATURALES MEDITERRÁNEOS**\n\n"
+        response += "🍯 *Alimentos simples para una dieta mediterránea auténtica*\n\n"
+        
+        # Categorías con emojis
+        category_emojis = {
+            "frutos_secos": "🥜",
+            "frutas_frescas": "🍎",
+            "frutas_secas": "🍇",
+            "lacteos_naturales": "🧀",
+            "aceitunas_encurtidos": "🫒",
+            "otros_naturales": "🍯"
+        }
+        
+        category_names = {
+            "frutos_secos": "FRUTOS SECOS",
+            "frutas_frescas": "FRUTAS FRESCAS",
+            "frutas_secas": "FRUTAS SECAS",
+            "lacteos_naturales": "LÁCTEOS NATURALES",
+            "aceitunas_encurtidos": "ACEITUNAS Y ENCURTIDOS",
+            "otros_naturales": "OTROS NATURALES"
+        }
+        
+        for category, items in complements.items():
+            if items:
+                emoji = category_emojis.get(category, "🍽️")
+                name = category_names.get(category, category.upper())
+                response += f"{emoji} **{name}:**\n"
+                
+                for item in items:
+                    seasonal_mark = " 🌱" if item["seasonal"] else ""
+                    response += f"• {item['name']} ({item['portion_size']}{item['unit']}) - {item['calories']} cal{seasonal_mark}\n"
+                response += "\n"
+        
+        # Sugerencias diarias
+        response += "📅 **SUGERENCIAS DIARIAS:**\n\n"
+        
+        for timing, items in suggestions.items():
+            timing_emojis = {
+                "desayuno": "🌅",
+                "media_mañana": "☀️",
+                "media_tarde": "🌇"
+            }
+            timing_names = {
+                "desayuno": "DESAYUNO",
+                "media_mañana": "MEDIA MAÑANA",
+                "media_tarde": "MEDIA TARDE"
+            }
+            
+            emoji = timing_emojis.get(timing, "🕐")
+            name = timing_names.get(timing, timing.upper())
+            
+            response += f"{emoji} **{name}:**\n"
+            if items:
+                combo_names = [item['name'] for item in items[:3]]  # Máximo 3 items
+                response += f"💡 {' + '.join(combo_names)}\n\n"
+            else:
+                response += "💡 No hay sugerencias disponibles\n\n"
+        
+        response += "🔄 **Comandos útiles:**\n"
+        response += "• `/nueva_semana` - Incluir complementos en rotación\n"
+        response += "• `/menu` - Ver plan completo con complementos\n"
+        response += "• `/compras` - Lista incluyendo complementos"
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error en complementos_command: {e}")
+        bot.reply_to(message, "❌ Error mostrando complementos. Intenta de nuevo.")
+
 @bot.message_handler(commands=['nueva_semana'])
 def nueva_semana_command(message):
     """Iniciar proceso de rotación semanal interactiva"""
@@ -1633,7 +1878,8 @@ def nueva_semana_command(message):
         intro_response += "1️⃣ Ver recetas disponibles por categoría\n"
         intro_response += "2️⃣ Mantener recetas favoritas ancladas\n"
         intro_response += "3️⃣ Buscar recetas nuevas con IA\n"
-        intro_response += "4️⃣ Rotación automática inteligente\n\n"
+        intro_response += "4️⃣ Rotación automática inteligente\n"
+        intro_response += "5️⃣ Gestionar complementos mediterráneos\n\n"
         intro_response += "Responde con el número de opción que prefieres 👇"
         
         bot.reply_to(message, intro_response, parse_mode='Markdown')
@@ -1668,8 +1914,11 @@ def handle_rotation_conversation(message):
             elif option == "4":
                 # Rotación automática inteligente
                 perform_intelligent_rotation(message)
+            elif option == "5":
+                # Gestionar complementos mediterráneos
+                manage_mediterranean_complements(message)
             else:
-                bot.reply_to(message, "❌ Opción no válida. Responde con 1, 2, 3 o 4.")
+                bot.reply_to(message, "❌ Opción no válida. Responde con 1, 2, 3, 4 o 5.")
                 return
         
         elif rotation_state == "selecting_recipes":
@@ -1677,6 +1926,15 @@ def handle_rotation_conversation(message):
         
         elif rotation_state == "searching_new":
             handle_new_recipe_search(message)
+            
+        elif rotation_state == "managing_complements":
+            handle_complements_management(message)
+            
+        elif rotation_state == "selecting_complements":
+            handle_manual_complements_selection(message)
+            
+        elif rotation_state == "confirming_classic_combos":
+            handle_classic_combos_confirmation(message)
             
     except Exception as e:
         logger.error(f"Error en handle_rotation_conversation: {e}")
@@ -1882,6 +2140,296 @@ def perform_intelligent_rotation(message):
     except Exception as e:
         logger.error(f"Error en perform_intelligent_rotation: {e}")
         bot.reply_to(message, "❌ Error en rotación automática.")
+
+def manage_mediterranean_complements(message):
+    """Gestionar complementos naturales mediterráneos"""
+    try:
+        response = "🥜 **GESTIÓN DE COMPLEMENTOS MEDITERRÁNEOS**\n\n"
+        response += "🍯 Configura tus alimentos simples semanales\n\n"
+        response += "🎯 **Opciones disponibles:**\n"
+        response += "A️⃣ Sugerencias automáticas balanceadas\n"
+        response += "B️⃣ Seleccionar complementos manualmente\n"
+        response += "C️⃣ Solo usar complementos estacionales\n"
+        response += "D️⃣ Ver combinaciones mediterráneas clásicas\n\n"
+        response += "Responde con A, B, C o D 👇"
+        
+        bot.reply_to(message, response, parse_mode='Markdown')
+        
+        # Cambiar estado de conversación
+        meal_bot.data["user_preferences"]["rotation_state"] = "managing_complements"
+        meal_bot.save_data()
+        
+    except Exception as e:
+        logger.error(f"Error en manage_mediterranean_complements: {e}")
+        bot.reply_to(message, "❌ Error gestionando complementos.")
+
+def handle_complements_management(message):
+    """Manejar gestión de complementos mediterráneos"""
+    try:
+        user_input = message.text.strip().upper()
+        
+        if user_input == "A":
+            # Sugerencias automáticas balanceadas
+            suggestions = meal_bot.get_daily_complements_suggestion()
+            selected_complements = []
+            
+            for timing, items in suggestions.items():
+                selected_complements.extend([item['id'] for item in items])
+            
+            # Calcular macros
+            complements_macros = meal_bot.calculate_complements_macros(selected_complements)
+            
+            # Guardar complementos seleccionados
+            meal_bot.data["user_preferences"]["weekly_complements"] = selected_complements
+            meal_bot.save_data()
+            
+            response = "✅ **COMPLEMENTOS AUTOMÁTICOS SELECCIONADOS**\n\n"
+            response += f"📊 **Macros diarios adicionales:**\n"
+            response += f"• Proteína: {complements_macros['protein']}g\n"
+            response += f"• Carbohidratos: {complements_macros['carbs']}g\n"
+            response += f"• Grasas: {complements_macros['fat']}g\n"
+            response += f"• Calorías: {complements_macros['calories']} kcal\n\n"
+            response += "🥜 Los complementos se rotan automáticamente para variedad\n\n"
+            response += "💡 Usa `/menu` para ver tu planificación completa"
+            
+            bot.reply_to(message, response, parse_mode='Markdown')
+            
+        elif user_input == "B":
+            # Seleccionar complementos manualmente
+            complements = meal_bot.get_available_complements()
+            
+            response = "📋 **SELECCIÓN MANUAL DE COMPLEMENTOS**\n\n"
+            response += "Elige los complementos que quieres esta semana:\n\n"
+            
+            for category, items in complements.items():
+                if items:
+                    category_names = {
+                        "frutos_secos": "🥜 FRUTOS SECOS",
+                        "frutas_frescas": "🍎 FRUTAS FRESCAS",
+                        "frutas_secas": "🍇 FRUTAS SECAS",
+                        "lacteos_naturales": "🧀 LÁCTEOS",
+                        "aceitunas_encurtidos": "🫒 ACEITUNAS",
+                        "otros_naturales": "🍯 OTROS"
+                    }
+                    
+                    response += f"**{category_names.get(category, category.upper())}:**\n"
+                    for item in items[:3]:  # Mostrar solo primeros 3
+                        response += f"• {item['name']}\n"
+                    response += "\n"
+            
+            response += "💬 **Instrucciones:**\n"
+            response += "Escribe los nombres de los complementos que quieres, separados por comas.\n\n"
+            response += "Ejemplo: `Almendras Crudas, Yogur Griego, Aceitunas Kalamata`"
+            
+            bot.reply_to(message, response, parse_mode='Markdown')
+            
+            # Cambiar estado para selección manual
+            meal_bot.data["user_preferences"]["rotation_state"] = "selecting_complements"
+            meal_bot.save_data()
+            return
+            
+        elif user_input == "C":
+            # Solo complementos estacionales
+            complements = meal_bot.get_available_complements()
+            seasonal_complements = []
+            
+            for category, items in complements.items():
+                for item in items:
+                    if item["seasonal"]:
+                        seasonal_complements.append(item['id'])
+            
+            if seasonal_complements:
+                # Calcular macros
+                complements_macros = meal_bot.calculate_complements_macros(seasonal_complements)
+                
+                # Guardar complementos estacionales
+                meal_bot.data["user_preferences"]["weekly_complements"] = seasonal_complements
+                meal_bot.save_data()
+                
+                response = "🌱 **COMPLEMENTOS ESTACIONALES SELECCIONADOS**\n\n"
+                response += f"📊 **Macros diarios adicionales:**\n"
+                response += f"• Proteína: {complements_macros['protein']}g\n"
+                response += f"• Carbohidratos: {complements_macros['carbs']}g\n"
+                response += f"• Grasas: {complements_macros['fat']}g\n"
+                response += f"• Calorías: {complements_macros['calories']} kcal\n\n"
+                response += "🌱 Solo ingredientes de temporada actual\n\n"
+                response += "💡 Usa `/menu` para ver tu planificación completa"
+            else:
+                response = "⚠️ **NO HAY COMPLEMENTOS ESTACIONALES DISPONIBLES**\n\n"
+                response += "Todos los complementos actuales están disponibles todo el año.\n\n"
+                response += "💡 Prueba la opción A para sugerencias automáticas."
+            
+            bot.reply_to(message, response, parse_mode='Markdown')
+            
+        elif user_input == "D":
+            # Ver combinaciones mediterráneas clásicas
+            combinations = meal_bot.data.get("combinaciones_mediterraneas", {})
+            
+            response = "🏛️ **COMBINACIONES MEDITERRÁNEAS CLÁSICAS**\n\n"
+            response += "🍯 *Inspiradas en la dieta tradicional mediterránea*\n\n"
+            
+            timing_emojis = {
+                "desayuno": "🌅",
+                "media_manana": "☀️",
+                "media_tarde": "🌇"
+            }
+            
+            for timing, combos in combinations.items():
+                emoji = timing_emojis.get(timing, "🕐")
+                response += f"{emoji} **{timing.upper().replace('_', ' ')}:**\n"
+                
+                for combo in combos:
+                    response += f"• {combo['name']}\n"
+                response += "\n"
+            
+            response += "💡 **¿Quieres usar estas combinaciones?**\n"
+            response += "Responde 'sí' para aplicarlas o 'no' para volver al menú anterior."
+            
+            bot.reply_to(message, response, parse_mode='Markdown')
+            
+            # Cambiar estado para confirmación
+            meal_bot.data["user_preferences"]["rotation_state"] = "confirming_classic_combos"
+            meal_bot.save_data()
+            return
+            
+        else:
+            bot.reply_to(message, "❌ Opción no válida. Responde con A, B, C o D.")
+            return
+        
+        # Limpiar estado si llegamos aquí
+        meal_bot.data["user_preferences"]["rotation_state"] = None
+        meal_bot.save_data()
+        
+    except Exception as e:
+        logger.error(f"Error en handle_complements_management: {e}")
+        bot.reply_to(message, "❌ Error manejando complementos.")
+
+def handle_manual_complements_selection(message):
+    """Manejar selección manual de complementos"""
+    try:
+        user_input = message.text.strip()
+        
+        # Dividir la entrada por comas
+        complement_names = [name.strip() for name in user_input.split(',')]
+        
+        # Buscar complementos por nombre
+        complements_data = meal_bot.data.get("complementos_naturales", {})
+        selected_complements = []
+        found_names = []
+        not_found = []
+        
+        for name in complement_names:
+            found = False
+            for category, items in complements_data.items():
+                for item_id, item in items.items():
+                    if name.lower() in item["name"].lower():
+                        selected_complements.append(item_id)
+                        found_names.append(item["name"])
+                        found = True
+                        break
+                if found:
+                    break
+            
+            if not found:
+                not_found.append(name)
+        
+        if selected_complements:
+            # Calcular macros
+            complements_macros = meal_bot.calculate_complements_macros(selected_complements)
+            
+            # Guardar complementos seleccionados
+            meal_bot.data["user_preferences"]["weekly_complements"] = selected_complements
+            meal_bot.save_data()
+            
+            response = "✅ **COMPLEMENTOS SELECCIONADOS MANUALMENTE**\n\n"
+            response += f"📋 **Complementos añadidos:** {len(found_names)}\n"
+            for name in found_names:
+                response += f"• {name}\n"
+            response += f"\n📊 **Macros diarios adicionales:**\n"
+            response += f"• Proteína: {complements_macros['protein']}g\n"
+            response += f"• Carbohidratos: {complements_macros['carbs']}g\n"
+            response += f"• Grasas: {complements_macros['fat']}g\n"
+            response += f"• Calorías: {complements_macros['calories']} kcal\n\n"
+            
+            if not_found:
+                response += f"⚠️ **No encontrados:** {', '.join(not_found)}\n\n"
+            
+            response += "💡 Usa `/menu` para ver tu planificación completa"
+            
+            bot.reply_to(message, response, parse_mode='Markdown')
+            
+            # Limpiar estado
+            meal_bot.data["user_preferences"]["rotation_state"] = None
+            meal_bot.save_data()
+        else:
+            response = "❌ **NO SE ENCONTRARON COMPLEMENTOS**\n\n"
+            response += f"No se pudo encontrar ningún complemento con los nombres:\n"
+            for name in complement_names:
+                response += f"• {name}\n"
+            response += "\n💡 Usa `/complementos` para ver la lista completa disponible."
+            
+            bot.reply_to(message, response, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error en handle_manual_complements_selection: {e}")
+        bot.reply_to(message, "❌ Error en selección manual de complementos.")
+
+def handle_classic_combos_confirmation(message):
+    """Manejar confirmación de combinaciones clásicas"""
+    try:
+        user_input = message.text.strip().lower()
+        
+        if user_input in ['sí', 'si', 'yes', 'y']:
+            # Aplicar combinaciones clásicas
+            combinations = meal_bot.data.get("combinaciones_mediterraneas", {})
+            selected_complements = []
+            
+            # Recopilar todos los items de las combinaciones
+            for timing, combos in combinations.items():
+                for combo in combos:
+                    selected_complements.extend(combo["items"])
+            
+            # Eliminar duplicados manteniendo orden
+            unique_complements = []
+            for item in selected_complements:
+                if item not in unique_complements:
+                    unique_complements.append(item)
+            
+            # Calcular macros
+            complements_macros = meal_bot.calculate_complements_macros(unique_complements)
+            
+            # Guardar complementos seleccionados
+            meal_bot.data["user_preferences"]["weekly_complements"] = unique_complements
+            meal_bot.save_data()
+            
+            response = "🏛️ **COMBINACIONES MEDITERRÁNEAS APLICADAS**\n\n"
+            response += f"📋 **Complementos clásicos añadidos:** {len(unique_complements)}\n\n"
+            response += f"📊 **Macros diarios adicionales:**\n"
+            response += f"• Proteína: {complements_macros['protein']}g\n"
+            response += f"• Carbohidratos: {complements_macros['carbs']}g\n"
+            response += f"• Grasas: {complements_macros['fat']}g\n"
+            response += f"• Calorías: {complements_macros['calories']} kcal\n\n"
+            response += "🍯 Siguiendo la tradición mediterránea auténtica\n\n"
+            response += "💡 Usa `/menu` para ver tu planificación completa"
+            
+            bot.reply_to(message, response, parse_mode='Markdown')
+            
+        elif user_input in ['no', 'n']:
+            response = "↩️ **REGRESANDO AL MENÚ ANTERIOR**\n\n"
+            response += "Usa `/nueva_semana` para explorar otras opciones de rotación."
+            
+            bot.reply_to(message, response, parse_mode='Markdown')
+        else:
+            bot.reply_to(message, "❌ Responde 'sí' para aplicar las combinaciones o 'no' para cancelar.")
+            return
+        
+        # Limpiar estado
+        meal_bot.data["user_preferences"]["rotation_state"] = None
+        meal_bot.save_data()
+        
+    except Exception as e:
+        logger.error(f"Error en handle_classic_combos_confirmation: {e}")
+        bot.reply_to(message, "❌ Error confirmando combinaciones clásicas.")
 
 def handle_recipe_selection(message):
     """Manejar selección manual de recetas"""

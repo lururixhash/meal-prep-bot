@@ -522,8 +522,350 @@
     "cereales": ["arroz", "quinoa", "avena", "pasta", "pan"],
     "vegetales": ["tomate", "cebolla", "ajo", "pimiento", "calabacín", "brócoli", "espinaca", "zanahoria", "aceitunas", "alcaparras"],
     "especias": ["sal", "pimienta", "oregano", "tomillo", "romero", "comino", "paprika", "curry"],
-    "lacteos": ["queso", "leche", "yogur", "mantequilla"],
-    "otros": ["aceite", "vinagre", "lata", "caldo"]
+    "lacteos": ["queso", "leche", "yogur", "mantequilla", "feta", "manchego", "griego"],
+    "frutos_secos": ["almendras", "nueces", "avellanas", "pistachos"],
+    "frutas": ["manzana", "pera", "uvas", "higos", "datiles", "pasas"],
+    "otros": ["aceite", "vinagre", "lata", "caldo", "miel", "oliva"]
+  },
+  "complementos_naturales": {
+    "frutos_secos": {
+      "almendras_crudas": {
+        "id": "almendras_crudas",
+        "name": "Almendras Crudas",
+        "category": "frutos_secos",
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 6,
+          "carbs": 3,
+          "fat": 15,
+          "calories": 174
+        },
+        "benefits": ["Vitamina E", "Magnesio", "Grasas saludables"],
+        "seasonal": false,
+        "mediterranean_origin": "España, Italia, Grecia"
+      },
+      "nueces": {
+        "id": "nueces",
+        "name": "Nueces",
+        "category": "frutos_secos",
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 4,
+          "carbs": 3,
+          "fat": 18,
+          "calories": 196
+        },
+        "benefits": ["Omega-3", "Antioxidantes", "Magnesio"],
+        "seasonal": false,
+        "mediterranean_origin": "Francia, Italia"
+      },
+      "avellanas": {
+        "id": "avellanas",
+        "name": "Avellanas",
+        "category": "frutos_secos",
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 4,
+          "carbs": 4,
+          "fat": 17,
+          "calories": 188
+        },
+        "benefits": ["Vitamina E", "Cobre", "Manganeso"],
+        "seasonal": false,
+        "mediterranean_origin": "Turquía, Italia, España"
+      },
+      "pistachos": {
+        "id": "pistachos",
+        "name": "Pistachos",
+        "category": "frutos_secos",
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 6,
+          "carbs": 8,
+          "fat": 13,
+          "calories": 162
+        },
+        "benefits": ["Potasio", "Vitamina B6", "Antioxidantes"],
+        "seasonal": false,
+        "mediterranean_origin": "Grecia, Turquía, Italia"
+      }
+    },
+    "frutas_frescas": {
+      "manzana_verde": {
+        "id": "manzana_verde",
+        "name": "Manzana Verde",
+        "category": "frutas_frescas",
+        "portion_size": 150,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 0,
+          "carbs": 19,
+          "fat": 0,
+          "calories": 78
+        },
+        "benefits": ["Fibra", "Vitamina C", "Antioxidantes"],
+        "seasonal": false,
+        "mediterranean_origin": "Universal"
+      },
+      "pera": {
+        "id": "pera",
+        "name": "Pera",
+        "category": "frutas_frescas",
+        "portion_size": 150,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 1,
+          "carbs": 23,
+          "fat": 0,
+          "calories": 87
+        },
+        "benefits": ["Fibra", "Vitamina C", "Potasio"],
+        "seasonal": true,
+        "mediterranean_origin": "Universal"
+      },
+      "uvas": {
+        "id": "uvas",
+        "name": "Uvas",
+        "category": "frutas_frescas",
+        "portion_size": 100,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 1,
+          "carbs": 16,
+          "fat": 0,
+          "calories": 69
+        },
+        "benefits": ["Antioxidantes", "Resveratrol", "Potasio"],
+        "seasonal": true,
+        "mediterranean_origin": "Francia, Italia, España, Grecia"
+      },
+      "higos_frescos": {
+        "id": "higos_frescos",
+        "name": "Higos Frescos",
+        "category": "frutas_frescas",
+        "portion_size": 100,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 1,
+          "carbs": 19,
+          "fat": 0,
+          "calories": 74
+        },
+        "benefits": ["Fibra", "Potasio", "Calcio"],
+        "seasonal": true,
+        "mediterranean_origin": "Turquía, Grecia, España"
+      }
+    },
+    "frutas_secas": {
+      "datiles": {
+        "id": "datiles",
+        "name": "Dátiles",
+        "category": "frutas_secas",
+        "portion_size": 25,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 1,
+          "carbs": 18,
+          "fat": 0,
+          "calories": 66
+        },
+        "benefits": ["Fibra", "Potasio", "Antioxidantes"],
+        "seasonal": false,
+        "mediterranean_origin": "Norte de África, Oriente Medio"
+      },
+      "higos_secos": {
+        "id": "higos_secos",
+        "name": "Higos Secos",
+        "category": "frutas_secas",
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 1,
+          "carbs": 19,
+          "fat": 0,
+          "calories": 74
+        },
+        "benefits": ["Fibra", "Calcio", "Hierro"],
+        "seasonal": false,
+        "mediterranean_origin": "Turquía, Grecia"
+      },
+      "pasas": {
+        "id": "pasas",
+        "name": "Pasas",
+        "category": "frutas_secas",
+        "portion_size": 25,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 1,
+          "carbs": 19,
+          "fat": 0,
+          "calories": 77
+        },
+        "benefits": ["Hierro", "Potasio", "Antioxidantes"],
+        "seasonal": false,
+        "mediterranean_origin": "España, Grecia, Turquía"
+      }
+    },
+    "lacteos_naturales": {
+      "queso_feta": {
+        "id": "queso_feta",
+        "name": "Queso Feta",
+        "category": "lacteos_naturales",
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 4,
+          "carbs": 1,
+          "fat": 6,
+          "calories": 75
+        },
+        "benefits": ["Calcio", "Probióticos", "Proteína completa"],
+        "seasonal": false,
+        "mediterranean_origin": "Grecia"
+      },
+      "queso_manchego": {
+        "id": "queso_manchego",
+        "name": "Queso Manchego",
+        "category": "lacteos_naturales",
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 8,
+          "carbs": 0,
+          "fat": 8,
+          "calories": 105
+        },
+        "benefits": ["Calcio", "Proteína", "Vitamina B12"],
+        "seasonal": false,
+        "mediterranean_origin": "España"
+      },
+      "yogur_griego": {
+        "id": "yogur_griego",
+        "name": "Yogur Griego Natural",
+        "category": "lacteos_naturales",
+        "portion_size": 150,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 15,
+          "carbs": 6,
+          "fat": 10,
+          "calories": 130
+        },
+        "benefits": ["Probióticos", "Proteína", "Calcio"],
+        "seasonal": false,
+        "mediterranean_origin": "Grecia"
+      }
+    },
+    "aceitunas_encurtidos": {
+      "aceitunas_kalamata": {
+        "id": "aceitunas_kalamata",
+        "name": "Aceitunas Kalamata",
+        "category": "aceitunas_encurtidos",
+        "portion_size": 20,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 0,
+          "carbs": 1,
+          "fat": 3,
+          "calories": 30
+        },
+        "benefits": ["Grasas monoinsaturadas", "Vitamina E", "Antioxidantes"],
+        "seasonal": false,
+        "mediterranean_origin": "Grecia"
+      },
+      "aceitunas_verdes": {
+        "id": "aceitunas_verdes",
+        "name": "Aceitunas Verdes",
+        "category": "aceitunas_encurtidos",
+        "portion_size": 20,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 0,
+          "carbs": 1,
+          "fat": 3,
+          "calories": 29
+        },
+        "benefits": ["Grasas saludables", "Hierro", "Vitamina E"],
+        "seasonal": false,
+        "mediterranean_origin": "España, Italia, Grecia"
+      }
+    },
+    "otros_naturales": {
+      "miel_cruda": {
+        "id": "miel_cruda",
+        "name": "Miel Cruda",
+        "category": "otros_naturales",
+        "portion_size": 15,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 0,
+          "carbs": 12,
+          "fat": 0,
+          "calories": 49
+        },
+        "benefits": ["Antioxidantes", "Enzimas naturales", "Antimicrobiano"],
+        "seasonal": false,
+        "mediterranean_origin": "Universal"
+      },
+      "aceite_oliva_virgen": {
+        "id": "aceite_oliva_virgen",
+        "name": "Aceite de Oliva Virgen Extra",
+        "category": "otros_naturales",
+        "portion_size": 10,
+        "unit": "ml",
+        "macros_per_portion": {
+          "protein": 0,
+          "carbs": 0,
+          "fat": 10,
+          "calories": 90
+        },
+        "benefits": ["Grasas monoinsaturadas", "Vitamina E", "Antioxidantes"],
+        "seasonal": false,
+        "mediterranean_origin": "España, Italia, Grecia"
+      }
+    }
+  },
+  "combinaciones_mediterraneas": {
+    "desayuno": [
+      {
+        "name": "Yogur con Miel y Nueces",
+        "items": ["yogur_griego", "miel_cruda", "nueces"],
+        "timing": "mañana"
+      },
+      {
+        "name": "Queso con Higos y Almendras",
+        "items": ["queso_manchego", "higos_frescos", "almendras_crudas"],
+        "timing": "mañana"
+      }
+    ],
+    "media_manana": [
+      {
+        "name": "Frutos Secos Mixtos",
+        "items": ["almendras_crudas", "nueces", "pasas"],
+        "timing": "media_mañana"
+      },
+      {
+        "name": "Fruta con Queso",
+        "items": ["manzana_verde", "queso_feta"],
+        "timing": "media_mañana"
+      }
+    ],
+    "media_tarde": [
+      {
+        "name": "Aceitunas y Queso",
+        "items": ["aceitunas_kalamata", "queso_manchego"],
+        "timing": "media_tarde"
+      },
+      {
+        "name": "Dátiles con Almendras",
+        "items": ["datiles", "almendras_crudas"],
+        "timing": "media_tarde"
+      }
+    ]
   },
   "shopping_lists": {},
   "cooking_history": []
