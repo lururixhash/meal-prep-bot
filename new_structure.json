@@ -1,0 +1,151 @@
+{
+  "categories": {
+    "timing": {
+      "pre_entreno": {
+        "descripcion": "15-30 min antes del entrenamiento - Carbohidratos de absorción rápida + mínima grasa",
+        "user_terms": ["Antes de entrenar", "Pre-workout"],
+        "macros_target": {
+          "carbs_percentage": 70,
+          "protein_percentage": 20,
+          "fat_percentage": 10
+        },
+        "function_categories": {
+          "energia_rapida": {
+            "descripcion": "Carbohidratos simples para energía inmediata",
+            "examples": ["plátano_miel", "avena_instant", "pan_integral_mermelada"]
+          },
+          "hidratacion": {
+            "descripcion": "Líquidos + electrolitos para preparar el cuerpo",
+            "examples": ["smoothie_frutas", "agua_coco", "te_verde_miel"]
+          }
+        }
+      },
+      "post_entreno": {
+        "descripcion": "0-30 min después del entrenamiento - Ventana anabólica para recuperación",
+        "user_terms": ["Después de entrenar", "Post-workout", "Para recuperar"],
+        "macros_target": {
+          "carbs_percentage": 50,
+          "protein_percentage": 40,
+          "fat_percentage": 10
+        },
+        "function_categories": {
+          "sintesis_proteica": {
+            "descripcion": "Proteínas completas para reparación muscular",
+            "examples": ["batido_proteina_platano", "pollo_batata", "huevos_avena"]
+          },
+          "reposicion_glucogeno": {
+            "descripcion": "Carbohidratos complejos para reponer energía",
+            "examples": ["quinoa_pollo", "arroz_integral_salmon", "pasta_integral_atun"]
+          }
+        }
+      },
+      "comida_principal": {
+        "descripcion": "Comidas balanceadas para mantenimiento metabólico general",
+        "user_terms": ["Comida normal", "Almuerzo", "Cena", "Comida completa"],
+        "macros_target": {
+          "carbs_percentage": 45,
+          "protein_percentage": 30,
+          "fat_percentage": 25
+        },
+        "function_categories": {
+          "equilibrio_nutricional": {
+            "descripcion": "Macronutrientes balanceados + micronutrientes",
+            "examples": ["salmon_quinoa_verduras", "pollo_mediteraneo", "lentejas_especiadas"]
+          },
+          "saciedad": {
+            "descripcion": "Fibra + proteína para control del apetito",
+            "examples": ["garbanzos_curry", "alubias_hierbas", "beef_mexicano"]
+          }
+        }
+      },
+      "snack_complemento": {
+        "descripcion": "Complementos para ajustar macros o micronutrientes específicos",
+        "user_terms": ["Snack", "Complemento", "Entre comidas"],
+        "macros_target": {
+          "flexible": true,
+          "descripcion": "Adaptable según necesidades del usuario"
+        },
+        "function_categories": {
+          "micronutrientes": {
+            "descripcion": "Vitaminas, minerales y antioxidantes",
+            "examples": ["frutas_frescas", "frutos_secos", "verduras_crudas"]
+          },
+          "grasas_saludables": {
+            "descripcion": "Ácidos grasos esenciales para función hormonal",
+            "examples": ["aceitunas", "aguacate", "nueces_almendras"]
+          }
+        }
+      }
+    },
+    "user_objectives": {
+      "bajar_peso": {
+        "scientific_term": "Déficit energético controlado",
+        "descripcion": "Perder grasa manteniendo músculo",
+        "caloric_adjustment": -0.15,
+        "protein_priority": "alta",
+        "recommended_timing": ["post_entreno", "comida_principal"]
+      },
+      "subir_masa": {
+        "scientific_term": "Superávit moderado + síntesis proteica",
+        "descripcion": "Ganar músculo minimizando grasa",
+        "caloric_adjustment": 0.15,
+        "protein_priority": "muy_alta",
+        "recommended_timing": ["pre_entreno", "post_entreno", "comida_principal"]
+      },
+      "recomposicion": {
+        "scientific_term": "Recomposición corporal",
+        "descripcion": "Bajar grasa y ganar músculo simultáneamente",
+        "caloric_adjustment": 0.0,
+        "protein_priority": "máxima",
+        "recommended_timing": ["post_entreno", "comida_principal", "snack_complemento"]
+      },
+      "mantener": {
+        "scientific_term": "Mantenimiento metabólico",
+        "descripcion": "Mantener peso y composición corporal",
+        "caloric_adjustment": 0.0,
+        "protein_priority": "moderada",
+        "recommended_timing": ["comida_principal", "snack_complemento"]
+      }
+    },
+    "complexity_levels": {
+      "1": {
+        "stars": "⭐",
+        "descripcion": "Muy fácil (15-30 min)",
+        "examples": ["huevos_revueltos", "yogur_frutas", "smoothie_proteina"]
+      },
+      "2": {
+        "stars": "⭐⭐",
+        "descripcion": "Fácil (30-45 min)",
+        "examples": ["pollo_plancha", "quinoa_verduras", "salmon_horno"]
+      },
+      "3": {
+        "stars": "⭐⭐⭐",
+        "descripcion": "Moderado (45-60 min)",
+        "examples": ["guisos_lentejas", "paella_integral", "lasaña_verduras"]
+      },
+      "4": {
+        "stars": "⭐⭐⭐⭐",
+        "descripcion": "Complejo (60+ min)",
+        "examples": ["cordero_marroqui", "cocidos_tradicionales", "preparaciones_fermentadas"]
+      }
+    }
+  },
+  "validation_criteria": {
+    "natural_ingredients": {
+      "allowed": ["carnes_frescas", "pescados_frescos", "vegetales", "frutas", "legumbres", "cereales_integrales", "frutos_secos", "lacteos_naturales", "aceites_prensado_frio", "especias_naturales", "hierbas_frescas"],
+      "forbidden": ["conservantes_artificiales", "colorantes", "saborizantes", "procesados_ultraprocesados", "harinas_refinadas", "azucares_añadidos", "grasas_trans"]
+    },
+    "macro_tolerance": {
+      "protein": 10,
+      "carbs": 15,
+      "fat": 10,
+      "calories": 50
+    },
+    "regional_availability": ["España", "Europa"],
+    "preparation_realism": {
+      "min_time": 15,
+      "max_time": 180,
+      "equipment_check": true
+    }
+  }
+}

@@ -1,0 +1,270 @@
+{
+  "database_version": "2.0",
+  "reset_date": "2025-07-25",
+  "users": {},
+  "global_categories": {
+    "timing": {
+      "pre_entreno": {
+        "energia_rapida": [],
+        "hidratacion": []
+      },
+      "post_entreno": {
+        "sintesis_proteica": [],
+        "reposicion_glucogeno": []
+      },
+      "comida_principal": {
+        "equilibrio_nutricional": [],
+        "saciedad": []
+      },
+      "snack_complemento": {
+        "micronutrientes": [],
+        "grasas_saludables": []
+      }
+    }
+  },
+  "global_complements": {
+    "frutos_secos": {
+      "almendras_crudas": {
+        "id": "almendras_crudas",
+        "name": "Almendras Crudas",
+        "category": "frutos_secos",
+        "timing_tags": ["snack_complemento"],
+        "function_tags": ["grasas_saludables", "micronutrientes"],
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 6,
+          "carbs": 3,
+          "fat": 15,
+          "calories": 174
+        },
+        "complexity": 1,
+        "benefits": ["Vitamina E", "Magnesio", "Grasas saludables"],
+        "seasonal": false,
+        "mediterranean_origin": "España, Italia, Grecia"
+      },
+      "nueces": {
+        "id": "nueces",
+        "name": "Nueces",
+        "category": "frutos_secos",
+        "timing_tags": ["snack_complemento"],
+        "function_tags": ["grasas_saludables", "micronutrientes"],
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 4,
+          "carbs": 3,
+          "fat": 18,
+          "calories": 196
+        },
+        "complexity": 1,
+        "benefits": ["Omega-3", "Antioxidantes", "Magnesio"],
+        "seasonal": false,
+        "mediterranean_origin": "Francia, Italia"
+      },
+      "pistachos": {
+        "id": "pistachos",
+        "name": "Pistachos",
+        "category": "frutos_secos",
+        "timing_tags": ["snack_complemento"],
+        "function_tags": ["grasas_saludables", "micronutrientes"],
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 6,
+          "carbs": 8,
+          "fat": 13,
+          "calories": 162
+        },
+        "complexity": 1,
+        "benefits": ["Potasio", "Vitamina B6", "Antioxidantes"],
+        "seasonal": false,
+        "mediterranean_origin": "Grecia, Turquía, Italia"
+      }
+    },
+    "frutas_frescas": {
+      "platano": {
+        "id": "platano",
+        "name": "Plátano",
+        "category": "frutas_frescas",
+        "timing_tags": ["pre_entreno", "post_entreno"],
+        "function_tags": ["energia_rapida", "reposicion_glucogeno"],
+        "portion_size": 120,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 1,
+          "carbs": 27,
+          "fat": 0,
+          "calories": 105
+        },
+        "complexity": 1,
+        "benefits": ["Potasio", "Vitamina B6", "Energía rápida"],
+        "seasonal": false,
+        "mediterranean_origin": "Universal"
+      },
+      "manzana_verde": {
+        "id": "manzana_verde", 
+        "name": "Manzana Verde",
+        "category": "frutas_frescas",
+        "timing_tags": ["snack_complemento"],
+        "function_tags": ["micronutrientes"],
+        "portion_size": 150,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 0,
+          "carbs": 19,
+          "fat": 0,
+          "calories": 78
+        },
+        "complexity": 1,
+        "benefits": ["Fibra", "Vitamina C", "Antioxidantes"],
+        "seasonal": false,
+        "mediterranean_origin": "Universal"
+      }
+    },
+    "lacteos_naturales": {
+      "yogur_griego": {
+        "id": "yogur_griego",
+        "name": "Yogur Griego Natural",
+        "category": "lacteos_naturales",
+        "timing_tags": ["post_entreno", "snack_complemento"],
+        "function_tags": ["sintesis_proteica", "micronutrientes"],
+        "portion_size": 150,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 15,
+          "carbs": 6,
+          "fat": 10,
+          "calories": 130
+        },
+        "complexity": 1,
+        "benefits": ["Probióticos", "Proteína", "Calcio"],
+        "seasonal": false,
+        "mediterranean_origin": "Grecia"
+      },
+      "queso_feta": {
+        "id": "queso_feta",
+        "name": "Queso Feta",
+        "category": "lacteos_naturales",
+        "timing_tags": ["comida_principal", "snack_complemento"],
+        "function_tags": ["sintesis_proteica", "grasas_saludables"],
+        "portion_size": 30,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 4,
+          "carbs": 1,
+          "fat": 6,
+          "calories": 75
+        },
+        "complexity": 1,
+        "benefits": ["Calcio", "Probióticos", "Proteína completa"],
+        "seasonal": false,
+        "mediterranean_origin": "Grecia"
+      }
+    }
+  },
+  "exercise_calories_database": {
+    "fuerza": {
+      "intensidad_baja": 3.0,
+      "intensidad_media": 4.5,
+      "intensidad_alta": 6.0
+    },
+    "cardio": {
+      "caminar": 3.5,
+      "trotar": 7.0,
+      "correr": 10.0,
+      "bicicleta": 8.0,
+      "natacion": 9.0
+    },
+    "deportes": {
+      "futbol": 8.0,
+      "baloncesto": 7.5,
+      "tenis": 6.5,
+      "padel": 6.0
+    },
+    "hiit": {
+      "intensidad_moderada": 8.0,
+      "intensidad_alta": 12.0
+    }
+  },
+  "cooking_schedules": {
+    "sesion_unica_domingo": {
+      "name": "Sesión única domingo",
+      "description": "Máxima eficiencia - Un día intenso",
+      "estimated_time": "4-6 horas",
+      "sessions": [
+        {
+          "day": "domingo",
+          "start_time": "10:00",
+          "duration": "4-6 horas",
+          "tasks": ["todas_las_recetas", "porcionar", "almacenar"]
+        }
+      ],
+      "pros": ["Máxima eficiencia", "Solo un día de cocina"],
+      "cons": ["Día muy intenso", "Comidas menos frescas al final"]
+    },
+    "dos_sesiones": {
+      "name": "Dos sesiones: Dom + Miér",
+      "description": "Balance entre eficiencia y frescura",
+      "estimated_time": "2-3 horas cada sesión",
+      "sessions": [
+        {
+          "day": "domingo",
+          "start_time": "10:00", 
+          "duration": "2-3 horas",
+          "tasks": ["proteinas", "legumbres", "bases"]
+        },
+        {
+          "day": "miercoles",
+          "start_time": "19:00",
+          "duration": "1-2 horas", 
+          "tasks": ["vegetales_frescos", "complementos", "ajustes"]
+        }
+      ],
+      "pros": ["Comidas más frescas", "Menos carga por sesión"],
+      "cons": ["Más planificación", "Dos días de cocina"]
+    },
+    "tres_sesiones": {
+      "name": "Tres sesiones: Dom/Mar/Vie",
+      "description": "Máxima frescura con meal prep",
+      "estimated_time": "1.5-2 horas cada sesión",
+      "sessions": [
+        {
+          "day": "domingo",
+          "start_time": "10:00",
+          "duration": "2 horas",
+          "tasks": ["proteinas_principales", "legumbres"]
+        },
+        {
+          "day": "martes", 
+          "start_time": "19:00",
+          "duration": "1.5 horas",
+          "tasks": ["bases_cereales", "vegetales"]
+        },
+        {
+          "day": "viernes",
+          "start_time": "19:00", 
+          "duration": "1 hora",
+          "tasks": ["ajustes_weekend", "preparacion_nueva_semana"]
+        }
+      ],
+      "pros": ["Máxima frescura", "Carga distribuida"],
+      "cons": ["Más tiempo semanal", "Requiere constancia"]
+    },
+    "preparacion_diaria": {
+      "name": "Preparación diaria",
+      "description": "Comida siempre fresca - Sin meal prep",
+      "estimated_time": "20-30 min/día",
+      "sessions": [
+        {
+          "day": "diario",
+          "start_time": "flexible",
+          "duration": "20-30 minutos",
+          "tasks": ["receta_del_dia", "complementos_frescos"]
+        }
+      ],
+      "pros": ["Comida siempre fresca", "Flexibilidad total"],
+      "cons": ["Tiempo diario requerido", "Más compras frecuentes"]
+    }
+  }
+}
