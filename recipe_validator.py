@@ -1,498 +1,732 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Sistema de validación automática para recetas generadas por IA
-Garantiza que todas las recetas cumplan los criterios establecidos
+Sistema avanzado de validación de recetas
+Valida ingredientes naturales, coherencia nutricional y timing apropiado
 """
 
 import json
 import re
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Any, Optional, Tuple
+from datetime import datetime
 
 class RecipeValidator:
     
     def __init__(self):
-        # Ingredientes naturales permitidos
+        # Base de datos de ingredientes naturales permitidos
         self.natural_ingredients = {
-            "carnes_frescas": [
-                "pollo", "pavo", "ternera", "cerdo", "cordero", "conejo",
-                "pechugas", "muslos", "solomillo", "lomo", "chuletas"
-            ],
-            "pescados_frescos": [
-                "salmon", "atun", "merluza", "lubina", "dorada", "bacalao",
-                "sardinas", "caballa", "trucha"
-            ],
-            "huevos": ["huevos", "claras", "yemas"],
-            "vegetales": [
-                "tomate", "cebolla", "ajo", "pimiento", "calabacin", "berenjena",
-                "brocoli", "coliflor", "espinacas", "acelgas", "zanahoria", "apio",
-                "pepino", "lechuga", "rúcula", "espárragos", "champiñones", "setas"
-            ],
-            "frutas": [
-                "manzana", "pera", "platano", "naranja", "limon", "uvas", "fresas",
-                "higos", "kiwi", "melon", "sandia", "melocotón", "albaricoque"
-            ],
-            "legumbres": [
-                "lentejas", "garbanzos", "alubias", "judias", "frijoles", "habas",
-                "guisantes", "soja"
-            ],
-            "cereales_integrales": [
-                "arroz integral", "quinoa", "avena", "trigo sarraceno", "mijo",
-                "amaranto", "pasta integral", "pan integral"
-            ],
-            "frutos_secos": [
-                "almendras", "nueces", "avellanas", "pistachos", "anacardos",
-                "piñones", "castañas"
-            ],
-            "semillas": [
-                "chia", "lino", "sesamo", "girasol", "calabaza"
-            ],
-            "lacteos_naturales": [
-                "yogur natural", "queso fresco", "feta", "manchego", "cabra",
-                "leche", "nata", "mantequilla"
-            ],
-            "aceites_grasas": [
-                "aceite oliva virgen", "aceite coco", "aguacate", "aceitunas"
-            ],
-            "especias_hierbas": [
-                "sal", "pimienta", "oregano", "tomillo", "romero", "albahaca",
-                "perejil", "cilantro", "comino", "paprika", "curcuma", "jengibre",
-                "canela", "laurel", "ajo en polvo", "cebolla en polvo"
-            ],
-            "otros_naturales": [
-                "vinagre", "limon", "caldo natural", "miel", "mostaza dijon"
-            ]
+            "proteina_animal": {
+                "carnes_frescas": ["pollo", "pavo", "ternera", "cerdo_magro", "cordero"],
+                "pescados_frescos": ["salmon", "atun", "merluza", "lubina", "sardinas", "caballa"],
+                "mariscos": ["langostinos", "mejillones", "calamares", "pulpo"],
+                "huevos": ["huevos_gallina", "huevos_codorniz"]
+            },
+            "proteina_vegetal": {
+                "legumbres": ["lentejas", "garbanzos", "judias_blancas", "judias_negras", "azuki"],
+                "frutos_secos": ["almendras", "nueces", "pistachos", "avellanas", "anacardos"],
+                "semillas": ["chia", "lino", "sesamo", "girasol", "calabaza"]
+            },
+            "carbohidratos": {
+                "cereales_integrales": ["arroz_integral", "quinoa", "avena", "centeno", "cebada"],
+                "tubérculos": ["patata", "boniato", "yuca"],
+                "frutas": ["platano", "manzana", "pera", "naranja", "fresas", "arandanos"]
+            },
+            "grasas_saludables": {
+                "aceites_prensado_frio": ["aceite_oliva_virgen", "aceite_coco", "aceite_aguacate"],
+                "frutos_grasos": ["aguacate", "aceitunas", "coco"],
+                "pescados_grasos": ["salmon", "sardinas", "caballa", "anchoas"]
+            },
+            "verduras": {
+                "hojas_verdes": ["espinacas", "acelgas", "lechuga", "rucula", "col_rizada"],
+                "cruciferas": ["brocoli", "coliflor", "col", "coles_bruselas"],
+                "solanaceas": ["tomate", "pimiento", "berenjena"],
+                "aliáceas": ["cebolla", "ajo", "puerro", "cebollino"]
+            },
+            "lacteos_naturales": {
+                "leches": ["leche_entera", "leche_cabra", "leche_oveja"],
+                "yogures": ["yogur_natural", "yogur_griego", "kefir"],
+                "quesos_frescos": ["queso_fresco", "ricotta", "mozzarella", "feta"]
+            },
+            "condimentos_naturales": {
+                "hierbas_frescas": ["albahaca", "oregano", "tomillo", "romero", "perejil"],
+                "especias": ["comino", "paprika", "curcuma", "jengibre", "canela"],
+                "otros": ["limon", "vinagre_manzana", "sal_marina", "pimienta_negra"]
+            }
         }
         
-        # Ingredientes prohibidos (procesados)
-        self.forbidden_ingredients = [
-            # Conservantes y aditivos
-            "conservante", "colorante", "saborizante", "edulcorante artificial",
-            "glutamato monosódico", "nitrito", "nitrato", "BHA", "BHT",
-            
-            # Procesados
-            "salchicha", "embutido", "bacon procesado", "jamón york",
-            "nuggets", "hamburguesa procesada", "croquetas congeladas",
-            
-            # Harinas refinadas y azúcares
-            "harina blanca", "pan blanco", "pasta blanca", "arroz blanco",
-            "azúcar blanco", "azúcar moreno", "jarabe maíz", "fructosa",
-            
-            # Grasas trans
-            "margarina", "manteca vegetal", "aceite parcialmente hidrogenado",
-            
-            # Ultraprocesados
-            "sopa de sobre", "caldo en cubitos", "salsa preparada embotellada",
-            "mayonesa industrial", "ketchup", "mostaza con aditivos"
-        ]
+        # Ingredientes procesados prohibidos
+        self.forbidden_ingredients = {
+            "embutidos": ["chorizo", "salchichon", "mortadela", "salami", "jamon_cocido"],
+            "procesados_carne": ["salchichas", "hamburguesas_congeladas", "nuggets", "bacon_procesado"],
+            "lacteos_procesados": ["queso_procesado", "queso_americano", "nata_montada", "leche_condensada"],
+            "salsas_comerciales": ["ketchup", "mayonesa_comercial", "salsa_barbacoa", "aderezos_embotellados"],
+            "conservas_procesadas": ["atun_escabeche", "sardinas_salsa", "verduras_lata_azucar"],
+            "cereales_refinados": ["arroz_blanco", "harina_refinada", "cereales_azucarados"],
+            "azucares_procesados": ["azucar_blanco", "jarabe_maiz", "edulcorantes_artificiales"],
+            "aceites_refinados": ["aceite_girasol_refinado", "margarina", "manteca_vegetal"],
+            "aditivos": ["glutamato_monosodico", "conservantes", "colorantes", "saborizantes"]
+        }
         
-        # Factores de conversión para macronutrientes (kcal/g)
-        self.macro_calories = {
-            "protein": 4,
-            "carbs": 4,
-            "fat": 9
+        # Criterios de validación nutricional
+        self.macro_ranges = {
+            "protein_min_percent": 15,
+            "protein_max_percent": 35,
+            "carbs_min_percent": 25,
+            "carbs_max_percent": 65,
+            "fat_min_percent": 15,
+            "fat_max_percent": 35
+        }
+        
+        # Criterios por timing nutricional
+        self.timing_criteria = {
+            "pre_entreno": {
+                "carbs_target_percent": (50, 80),
+                "protein_target_percent": (10, 20),
+                "fat_target_percent": (5, 15),
+                "fiber_max_g": 5,
+                "calories_range": (150, 350)
+            },
+            "post_entreno": {
+                "protein_target_percent": (30, 50),
+                "carbs_target_percent": (35, 55),
+                "fat_target_percent": (10, 25),
+                "protein_min_g": 20,
+                "calories_range": (250, 500)
+            },
+            "comida_principal": {
+                "protein_target_percent": (20, 35),
+                "carbs_target_percent": (35, 50),
+                "fat_target_percent": (20, 35),
+                "fiber_min_g": 8,
+                "calories_range": (400, 700)
+            },
+            "snack_complemento": {
+                "fat_target_percent": (25, 45),
+                "protein_target_percent": (15, 30),
+                "carbs_target_percent": (25, 60),
+                "calories_range": (100, 300)
+            }
         }
     
-    def validate_recipe(self, recipe_data: Dict, target_macros: Optional[Dict] = None) -> Dict:
+    def validate_recipe(self, recipe_data: Dict) -> Dict:
         """
-        Validación completa de una receta
-        Retorna diccionario con resultado de validación y errores encontrados
+        Validación completa de receta con puntuación 0-100
         """
-        
         validation_result = {
-            "is_valid": True,
-            "errors": [],
-            "warnings": [],
-            "score": 0,
-            "details": {}
+            "overall_score": 0,
+            "category_scores": {},
+            "issues": [],
+            "recommendations": [],
+            "is_valid": False,
+            "validation_details": {}
         }
         
-        # 1. Validar estructura JSON
-        structure_result = self._validate_structure(recipe_data)
-        validation_result["details"]["structure"] = structure_result
-        if not structure_result["valid"]:
-            validation_result["is_valid"] = False
-            validation_result["errors"].extend(structure_result["errors"])
-        
-        # 2. Validar ingredientes naturales
-        ingredients_result = self._validate_natural_ingredients(recipe_data.get("ingredients", []))
-        validation_result["details"]["ingredients"] = ingredients_result
-        if not ingredients_result["valid"]:
-            validation_result["is_valid"] = False
-            validation_result["errors"].extend(ingredients_result["errors"])
-        
-        # 3. Validar macronutrientes
-        if target_macros:
-            macros_result = self._validate_macros(recipe_data.get("macros_per_serving", {}), target_macros)
-            validation_result["details"]["macros"] = macros_result
-            if not macros_result["valid"]:
-                validation_result["warnings"].extend(macros_result["warnings"])
-        
-        # 4. Validar coherencia nutricional
-        nutritional_result = self._validate_nutritional_coherence(recipe_data)
-        validation_result["details"]["nutritional"] = nutritional_result
-        if not nutritional_result["valid"]:
-            validation_result["warnings"].extend(nutritional_result["warnings"])
-        
-        # 5. Validar tiempo de preparación
-        time_result = self._validate_preparation_time(recipe_data)
-        validation_result["details"]["time"] = time_result
-        if not time_result["valid"]:
-            validation_result["warnings"].extend(time_result["warnings"])
-        
-        # 6. Validar disponibilidad regional
-        availability_result = self._validate_regional_availability(recipe_data.get("ingredients", []))
-        validation_result["details"]["availability"] = availability_result
-        if not availability_result["valid"]:
-            validation_result["warnings"].extend(availability_result["warnings"])
-        
-        # Calcular score total (0-100)
-        validation_result["score"] = self._calculate_score(validation_result["details"])
-        
+        try:
+            # 1. Validar ingredientes naturales (30 puntos)
+            ingredients_score, ingredients_details = self._validate_ingredients(recipe_data)
+            validation_result["category_scores"]["ingredients"] = ingredients_score
+            validation_result["validation_details"]["ingredients"] = ingredients_details
+            
+            # 2. Validar coherencia nutricional (25 puntos)
+            nutrition_score, nutrition_details = self._validate_nutrition(recipe_data)
+            validation_result["category_scores"]["nutrition"] = nutrition_score
+            validation_result["validation_details"]["nutrition"] = nutrition_details
+            
+            # 3. Validar timing apropiado (20 puntos)
+            timing_score, timing_details = self._validate_timing(recipe_data)
+            validation_result["category_scores"]["timing"] = timing_score
+            validation_result["validation_details"]["timing"] = timing_details
+            
+            # 4. Validar practicidad meal prep (15 puntos)
+            prep_score, prep_details = self._validate_meal_prep(recipe_data)
+            validation_result["category_scores"]["meal_prep"] = prep_score
+            validation_result["validation_details"]["meal_prep"] = prep_details
+            
+            # 5. Validar completitud de datos (10 puntos)
+            completeness_score, completeness_details = self._validate_completeness(recipe_data)
+            validation_result["category_scores"]["completeness"] = completeness_score
+            validation_result["validation_details"]["completeness"] = completeness_details
+            
+            # Calcular puntuación total
+            total_score = (
+                ingredients_score * 0.30 +
+                nutrition_score * 0.25 +
+                timing_score * 0.20 +
+                prep_score * 0.15 +
+                completeness_score * 0.10
+            )
+            
+            validation_result["overall_score"] = round(total_score)
+            validation_result["is_valid"] = total_score >= 70  # Umbral de aprobación
+            
+            # Generar recomendaciones generales
+            validation_result["recommendations"] = self._generate_recommendations(validation_result)
+            
+        except Exception as e:
+            validation_result["issues"].append(f"Error en validación: {str(e)}")
+            
         return validation_result
     
-    def _validate_structure(self, recipe_data: Dict) -> Dict:
-        """Validar que la receta tenga la estructura JSON correcta"""
-        
-        required_fields = [
-            "id", "name", "description", "timing_category", "function_category",
-            "servings", "prep_time_minutes", "complexity", "ingredients",
-            "steps", "macros_per_serving"
-        ]
-        
-        missing_fields = []
-        for field in required_fields:
-            if field not in recipe_data:
-                missing_fields.append(field)
-        
-        # Validar tipos de datos
-        type_errors = []
-        if "servings" in recipe_data and not isinstance(recipe_data["servings"], (int, float)):
-            type_errors.append("servings debe ser numérico")
-        
-        if "prep_time_minutes" in recipe_data and not isinstance(recipe_data["prep_time_minutes"], (int, float)):
-            type_errors.append("prep_time_minutes debe ser numérico")
-        
-        if "ingredients" in recipe_data and not isinstance(recipe_data["ingredients"], list):
-            type_errors.append("ingredients debe ser una lista")
-        
-        if "steps" in recipe_data and not isinstance(recipe_data["steps"], list):
-            type_errors.append("steps debe ser una lista")
-        
-        return {
-            "valid": len(missing_fields) == 0 and len(type_errors) == 0,
-            "errors": missing_fields + type_errors,
-            "missing_fields": missing_fields,
-            "type_errors": type_errors
+    def _validate_ingredients(self, recipe_data: Dict) -> Tuple[int, Dict]:
+        """
+        Validar que todos los ingredientes sean naturales y permitidos
+        """
+        score = 0
+        details = {
+            "natural_ingredients": [],
+            "forbidden_found": [],
+            "unrecognized": [],
+            "categories_represented": []
         }
-    
-    def _validate_natural_ingredients(self, ingredients: List) -> Dict:
-        """Validar que todos los ingredientes sean naturales"""
         
-        forbidden_found = []
-        natural_score = 0
+        ingredients = recipe_data.get("ingredientes", [])
+        if not ingredients:
+            return 0, details
+        
         total_ingredients = len(ingredients)
+        natural_count = 0
+        forbidden_count = 0
+        
+        # Crear lista plana de ingredientes naturales
+        all_natural = []
+        for category, subcategories in self.natural_ingredients.items():
+            for subcat, items in subcategories.items():
+                all_natural.extend(items)
+                
+        # Crear lista plana de ingredientes prohibidos
+        all_forbidden = []
+        for category, items in self.forbidden_ingredients.items():
+            all_forbidden.extend(items)
         
         for ingredient in ingredients:
-            ingredient_text = ""
-            if isinstance(ingredient, dict):
-                ingredient_text = ingredient.get("item", "").lower()
-            elif isinstance(ingredient, str):
-                ingredient_text = ingredient.lower()
+            ingredient_name = ingredient.get("nombre", "").lower()
             
-            # Buscar ingredientes prohibidos
-            for forbidden in self.forbidden_ingredients:
-                if forbidden.lower() in ingredient_text:
-                    forbidden_found.append(f"Ingrediente prohibido: {ingredient_text}")
+            # Normalizar nombre (quitar acentos, espacios, etc.)
+            normalized_name = self._normalize_ingredient_name(ingredient_name)
             
             # Verificar si es natural
-            is_natural = False
-            for category, natural_items in self.natural_ingredients.items():
-                for natural_item in natural_items:
-                    if natural_item.lower() in ingredient_text:
-                        is_natural = True
-                        break
-                if is_natural:
-                    break
-            
-            if is_natural:
-                natural_score += 1
-        
-        natural_percentage = (natural_score / total_ingredients * 100) if total_ingredients > 0 else 0
-        
-        return {
-            "valid": len(forbidden_found) == 0,
-            "errors": forbidden_found,
-            "natural_percentage": natural_percentage,
-            "natural_count": natural_score,
-            "total_count": total_ingredients
-        }
-    
-    def _validate_macros(self, recipe_macros: Dict, target_macros: Dict) -> Dict:
-        """Validar que los macronutrientes estén dentro del rango aceptable"""
-        
-        # Tolerancias por nutriente
-        tolerances = {
-            "protein": 0.10,  # ±10%
-            "carbs": 0.15,    # ±15%
-            "fat": 0.10,      # ±10%
-            "calories": 50    # ±50 kcal (absoluto)
-        }
-        
-        warnings = []
-        macro_details = {}
-        
-        for macro in ["protein", "carbs", "fat", "calories"]:
-            if macro not in recipe_macros or macro not in target_macros:
-                continue
+            if any(natural in normalized_name for natural in all_natural):
+                natural_count += 1
+                details["natural_ingredients"].append(ingredient_name)
                 
-            recipe_value = recipe_macros[macro]
-            target_value = target_macros[macro]
+                # Identificar categoría
+                category = self._identify_ingredient_category(normalized_name)
+                if category and category not in details["categories_represented"]:
+                    details["categories_represented"].append(category)
             
-            if macro == "calories":
-                # Tolerancia absoluta para calorías
-                diff = abs(recipe_value - target_value)
-                tolerance = tolerances[macro]
-                is_within_range = diff <= tolerance
+            # Verificar si está prohibido
+            elif any(forbidden in normalized_name for forbidden in all_forbidden):
+                forbidden_count += 1
+                details["forbidden_found"].append(ingredient_name)
+            
             else:
-                # Tolerancia porcentual para otros macros
-                tolerance = tolerances[macro]
-                min_value = target_value * (1 - tolerance)
-                max_value = target_value * (1 + tolerance)
-                is_within_range = min_value <= recipe_value <= max_value
-                diff_percentage = abs(recipe_value - target_value) / target_value * 100
+                details["unrecognized"].append(ingredient_name)
+        
+        # Calcular puntuación
+        if total_ingredients > 0:
+            natural_ratio = natural_count / total_ingredients
+            forbidden_penalty = forbidden_count * 10  # -10 puntos por ingrediente prohibido
             
-            macro_details[macro] = {
-                "recipe_value": recipe_value,
-                "target_value": target_value,
-                "within_range": is_within_range,
-                "difference": diff if macro == "calories" else diff_percentage
+            base_score = natural_ratio * 100
+            final_score = max(0, base_score - forbidden_penalty)
+            
+            # Bonus por diversidad de categorías
+            category_bonus = min(20, len(details["categories_represented"]) * 5)
+            
+            score = min(100, final_score + category_bonus)
+        
+        return int(score), details
+    
+    def _validate_nutrition(self, recipe_data: Dict) -> Tuple[int, Dict]:
+        """
+        Validar coherencia nutricional de macros
+        """
+        score = 0
+        details = {
+            "macros_analyzed": {},
+            "ratios_calculated": {},
+            "coherence_issues": [],
+            "balance_assessment": ""
+        }
+        
+        macros = recipe_data.get("macros_por_porcion", {})
+        if not macros:
+            return 0, details
+        
+        try:
+            calories = macros.get("calorias", 0)
+            protein_g = macros.get("proteinas", 0)
+            carbs_g = macros.get("carbohidratos", 0)
+            fat_g = macros.get("grasas", 0)
+            
+            if calories <= 0:
+                details["coherence_issues"].append("Calorías inválidas o faltantes")
+                return 0, details
+            
+            # Calcular calorías de macros
+            calculated_calories = (protein_g * 4) + (carbs_g * 4) + (fat_g * 9)
+            
+            details["macros_analyzed"] = {
+                "reported_calories": calories,
+                "calculated_calories": calculated_calories,
+                "protein_g": protein_g,
+                "carbs_g": carbs_g,
+                "fat_g": fat_g
             }
             
-            if not is_within_range:
-                if macro == "calories":
-                    warnings.append(f"{macro}: {recipe_value} vs objetivo {target_value} (diff: {diff:.0f} kcal)")
+            # Verificar coherencia calórica (±10% tolerancia)
+            calorie_difference = abs(calories - calculated_calories)
+            calorie_tolerance = calories * 0.10
+            
+            if calorie_difference <= calorie_tolerance:
+                coherence_score = 40
+            else:
+                coherence_score = max(0, 40 - (calorie_difference / calories * 100))
+            
+            # Calcular ratios de macronutrientes
+            protein_percent = (protein_g * 4 / calories) * 100
+            carbs_percent = (carbs_g * 4 / calories) * 100
+            fat_percent = (fat_g * 9 / calories) * 100
+            
+            details["ratios_calculated"] = {
+                "protein_percent": round(protein_percent, 1),
+                "carbs_percent": round(carbs_percent, 1),
+                "fat_percent": round(fat_percent, 1),
+                "total_percent": round(protein_percent + carbs_percent + fat_percent, 1)
+            }
+            
+            # Validar rangos de macronutrientes
+            balance_score = 0
+            
+            # Proteína
+            if self.macro_ranges["protein_min_percent"] <= protein_percent <= self.macro_ranges["protein_max_percent"]:
+                balance_score += 20
+            else:
+                details["coherence_issues"].append(f"Proteína fuera de rango: {protein_percent:.1f}%")
+            
+            # Carbohidratos
+            if self.macro_ranges["carbs_min_percent"] <= carbs_percent <= self.macro_ranges["carbs_max_percent"]:
+                balance_score += 20
+            else:
+                details["coherence_issues"].append(f"Carbohidratos fuera de rango: {carbs_percent:.1f}%")
+            
+            # Grasas
+            if self.macro_ranges["fat_min_percent"] <= fat_percent <= self.macro_ranges["fat_max_percent"]:
+                balance_score += 20
+            else:
+                details["coherence_issues"].append(f"Grasas fuera de rango: {fat_percent:.1f}%")
+            
+            # Evaluación del balance
+            total_percent = protein_percent + carbs_percent + fat_percent
+            if 95 <= total_percent <= 105:
+                balance_score += 20
+                details["balance_assessment"] = "Balance nutricional excelente"
+            elif 90 <= total_percent <= 110:
+                balance_score += 10
+                details["balance_assessment"] = "Balance nutricional bueno"
+            else:
+                details["balance_assessment"] = "Balance nutricional necesita ajustes"
+            
+            score = coherence_score + balance_score
+            
+        except Exception as e:
+            details["coherence_issues"].append(f"Error en análisis nutricional: {str(e)}")
+            score = 0
+        
+        return int(min(100, score)), details
+    
+    def _validate_timing(self, recipe_data: Dict) -> Tuple[int, Dict]:
+        """
+        Validar que la receta sea apropiada para su timing nutricional
+        """
+        score = 0
+        details = {
+            "declared_timing": "",
+            "timing_analysis": {},
+            "appropriateness_score": 0,
+            "timing_recommendations": []
+        }
+        
+        # Obtener timing declarado
+        timing_category = recipe_data.get("categoria_timing", "")
+        if not timing_category:
+            details["timing_recommendations"].append("Categoría de timing no especificada")
+            return 0, details
+        
+        details["declared_timing"] = timing_category
+        
+        # Obtener criterios para este timing
+        criteria = self.timing_criteria.get(timing_category)
+        if not criteria:
+            details["timing_recommendations"].append(f"Timing category '{timing_category}' no reconocido")
+            return 20, details  # Puntuación básica por tener timing
+        
+        macros = recipe_data.get("macros_por_porcion", {})
+        if not macros:
+            return 20, details
+        
+        try:
+            calories = macros.get("calorias", 0)
+            protein_g = macros.get("proteinas", 0)
+            carbs_g = macros.get("carbohidratos", 0)
+            fat_g = macros.get("grasas", 0)
+            fiber_g = macros.get("fibra", 0)
+            
+            if calories <= 0:
+                return 20, details
+            
+            # Calcular porcentajes de macros
+            protein_percent = (protein_g * 4 / calories) * 100
+            carbs_percent = (carbs_g * 4 / calories) * 100
+            fat_percent = (fat_g * 9 / calories) * 100
+            
+            timing_score = 0
+            max_timing_score = 80  # 80 puntos máximos por timing + 20 base
+            
+            # Validar rango calórico
+            cal_min, cal_max = criteria.get("calories_range", (0, 1000))
+            if cal_min <= calories <= cal_max:
+                timing_score += 20
+                details["timing_analysis"]["calories_appropriate"] = True
+            else:
+                details["timing_analysis"]["calories_appropriate"] = False
+                details["timing_recommendations"].append(
+                    f"Calorías ({calories}) fuera del rango recomendado para {timing_category}: {cal_min}-{cal_max}"
+                )
+            
+            # Validar proteína
+            if "protein_target_percent" in criteria:
+                prot_min, prot_max = criteria["protein_target_percent"]
+                if prot_min <= protein_percent <= prot_max:
+                    timing_score += 20
+                    details["timing_analysis"]["protein_appropriate"] = True
                 else:
-                    warnings.append(f"{macro}: {recipe_value}g vs objetivo {target_value}g (diff: {diff_percentage:.1f}%)")
-        
-        # Validar coherencia de calorías calculadas
-        calculated_calories = (
-            recipe_macros.get("protein", 0) * self.macro_calories["protein"] +
-            recipe_macros.get("carbs", 0) * self.macro_calories["carbs"] +
-            recipe_macros.get("fat", 0) * self.macro_calories["fat"]
-        )
-        
-        stated_calories = recipe_macros.get("calories", 0)
-        calorie_diff = abs(calculated_calories - stated_calories)
-        
-        if calorie_diff > 20:  # Tolerancia de 20 kcal para redondeos
-            warnings.append(f"Calorías inconsistentes: calculadas {calculated_calories:.0f} vs declaradas {stated_calories}")
-        
-        return {
-            "valid": len(warnings) < 2,  # Máximo 1 warning para ser válido
-            "warnings": warnings,
-            "macro_details": macro_details,
-            "calorie_coherence": {
-                "calculated": calculated_calories,
-                "stated": stated_calories,
-                "difference": calorie_diff
-            }
-        }
-    
-    def _validate_nutritional_coherence(self, recipe_data: Dict) -> Dict:
-        """Validar coherencia nutricional general de la receta"""
-        
-        warnings = []
-        
-        # Validar que el timing coincida con los macros
-        timing = recipe_data.get("timing_category", "")
-        macros = recipe_data.get("macros_per_serving", {})
-        
-        if timing == "pre_entreno":
-            # Pre-entreno debería ser alto en carbos, bajo en grasa
-            carb_percentage = self._calculate_macro_percentage(macros, "carbs")
-            fat_percentage = self._calculate_macro_percentage(macros, "fat")
+                    details["timing_analysis"]["protein_appropriate"] = False
+                    details["timing_recommendations"].append(
+                        f"Proteína ({protein_percent:.1f}%) fuera del rango para {timing_category}: {prot_min}-{prot_max}%"
+                    )
             
-            if carb_percentage < 50:
-                warnings.append("Pre-entreno debería tener >50% carbohidratos")
-            if fat_percentage > 20:
-                warnings.append("Pre-entreno debería tener <20% grasas")
-        
-        elif timing == "post_entreno":
-            # Post-entreno debería ser alto en proteína
-            protein_percentage = self._calculate_macro_percentage(macros, "protein")
+            # Validar carbohidratos
+            if "carbs_target_percent" in criteria:
+                carbs_min, carbs_max = criteria["carbs_target_percent"]
+                if carbs_min <= carbs_percent <= carbs_max:
+                    timing_score += 20
+                    details["timing_analysis"]["carbs_appropriate"] = True
+                else:
+                    details["timing_analysis"]["carbs_appropriate"] = False
+                    details["timing_recommendations"].append(
+                        f"Carbohidratos ({carbs_percent:.1f}%) fuera del rango para {timing_category}: {carbs_min}-{carbs_max}%"
+                    )
             
-            if protein_percentage < 25:
-                warnings.append("Post-entreno debería tener >25% proteína")
+            # Validar grasas
+            if "fat_target_percent" in criteria:
+                fat_min, fat_max = criteria["fat_target_percent"]
+                if fat_min <= fat_percent <= fat_max:
+                    timing_score += 20
+                    details["timing_analysis"]["fat_appropriate"] = True
+                else:
+                    details["timing_analysis"]["fat_appropriate"] = False
+                    details["timing_recommendations"].append(
+                        f"Grasas ({fat_percent:.1f}%) fuera del rango para {timing_category}: {fat_min}-{fat_max}%"
+                    )
+            
+            # Validaciones específicas por timing
+            if timing_category == "pre_entreno" and "fiber_max_g" in criteria:
+                if fiber_g <= criteria["fiber_max_g"]:
+                    timing_score += 10
+                else:
+                    details["timing_recommendations"].append(
+                        f"Fibra muy alta ({fiber_g}g) para pre-entreno. Máximo recomendado: {criteria['fiber_max_g']}g"
+                    )
+            
+            elif timing_category == "post_entreno" and "protein_min_g" in criteria:
+                if protein_g >= criteria["protein_min_g"]:
+                    timing_score += 10
+                else:
+                    details["timing_recommendations"].append(
+                        f"Proteína insuficiente ({protein_g}g) para post-entreno. Mínimo recomendado: {criteria['protein_min_g']}g"
+                    )
+            
+            elif timing_category == "comida_principal" and "fiber_min_g" in criteria:
+                if fiber_g >= criteria["fiber_min_g"]:
+                    timing_score += 10
+                else:
+                    details["timing_recommendations"].append(
+                        f"Fibra baja ({fiber_g}g) para comida principal. Mínimo recomendado: {criteria['fiber_min_g']}g"
+                    )
+            
+            details["appropriateness_score"] = timing_score
+            score = 20 + timing_score  # 20 puntos base + hasta 80 por timing apropiado
+            
+        except Exception as e:
+            details["timing_recommendations"].append(f"Error en análisis de timing: {str(e)}")
+            score = 20
         
-        # Validar densidad calórica razonable
-        calories = macros.get("calories", 0)
-        if calories < 50:
-            warnings.append("Densidad calórica muy baja para una receta completa")
-        elif calories > 1000:
-            warnings.append("Densidad calórica muy alta para una porción")
-        
-        return {
-            "valid": len(warnings) == 0,
-            "warnings": warnings
-        }
+        return int(min(100, score)), details
     
-    def _validate_preparation_time(self, recipe_data: Dict) -> Dict:
-        """Validar que el tiempo de preparación sea realista"""
-        
-        prep_time = recipe_data.get("prep_time_minutes", 0)
-        complexity = recipe_data.get("complexity", 1)
-        steps_count = len(recipe_data.get("steps", []))
-        
-        warnings = []
-        
-        # Validar coherencia tiempo-complejidad
-        expected_time_ranges = {
-            1: (15, 30),   # ⭐
-            2: (30, 45),   # ⭐⭐
-            3: (45, 60),   # ⭐⭐⭐
-            4: (60, 120)   # ⭐⭐⭐⭐
+    def _validate_meal_prep(self, recipe_data: Dict) -> Tuple[int, Dict]:
+        """
+        Validar practicidad para meal prep
+        """
+        score = 0
+        details = {
+            "prep_time_score": 0,
+            "conservation_score": 0,
+            "practicality_issues": [],
+            "prep_recommendations": []
         }
         
-        if complexity in expected_time_ranges:
-            min_time, max_time = expected_time_ranges[complexity]
-            if prep_time < min_time or prep_time > max_time:
-                warnings.append(f"Tiempo {prep_time}min no coherente con complejidad {complexity} estrellas")
+        try:
+            # Validar tiempo de preparación
+            prep_time = recipe_data.get("tiempo_prep", 0)
+            if prep_time <= 30:
+                prep_time_score = 50
+            elif prep_time <= 45:
+                prep_time_score = 35
+            elif prep_time <= 60:
+                prep_time_score = 20
+            else:
+                prep_time_score = 10
+                details["practicality_issues"].append(f"Tiempo de preparación muy alto: {prep_time} minutos")
+            
+            details["prep_time_score"] = prep_time_score
+            
+            # Validar tips de meal prep
+            meal_prep_tips = recipe_data.get("meal_prep_tips", [])
+            if meal_prep_tips and len(meal_prep_tips) >= 2:
+                conservation_score = 30
+            elif meal_prep_tips and len(meal_prep_tips) >= 1:
+                conservation_score = 20
+            else:
+                conservation_score = 10
+                details["prep_recommendations"].append("Agregar consejos específicos de meal prep")
+            
+            details["conservation_score"] = conservation_score
+            
+            # Bonus por nivel de dificultad apropiado
+            difficulty = recipe_data.get("dificultad", "")
+            difficulty_stars = difficulty.count("⭐")
+            
+            if difficulty_stars <= 2:
+                difficulty_bonus = 20
+            elif difficulty_stars == 3:
+                difficulty_bonus = 10
+            else:
+                difficulty_bonus = 0
+                details["practicality_issues"].append("Dificultad muy alta para meal prep rutinario")
+            
+            score = prep_time_score + conservation_score + difficulty_bonus
+            
+        except Exception as e:
+            details["practicality_issues"].append(f"Error en análisis de meal prep: {str(e)}")
+            score = 20
         
-        # Validar coherencia tiempo-pasos
-        if steps_count > 0:
-            time_per_step = prep_time / steps_count
-            if time_per_step < 2:
-                warnings.append("Tiempo insuficiente por paso de preparación")
-            elif time_per_step > 20:
-                warnings.append("Tiempo excesivo por paso de preparación")
-        
-        return {
-            "valid": len(warnings) == 0,
-            "warnings": warnings,
-            "prep_time": prep_time,
-            "complexity": complexity,
-            "steps_count": steps_count
-        }
+        return int(min(100, score)), details
     
-    def _validate_regional_availability(self, ingredients: List) -> Dict:
-        """Validar disponibilidad de ingredientes en España"""
+    def _validate_completeness(self, recipe_data: Dict) -> Tuple[int, Dict]:
+        """
+        Validar completitud de los datos de la receta
+        """
+        score = 0
+        details = {
+            "required_fields": [],
+            "missing_fields": [],
+            "completeness_percentage": 0
+        }
         
-        # Ingredientes difíciles de encontrar en España
-        uncommon_ingredients = [
-            "quinoa negra", "amaranto", "teff", "miso", "tahini",
-            "aceite mct", "stevia líquida", "xilitol", "eritritol",
-            "harina de almendra", "harina de coco", "levadura nutricional"
+        # Campos requeridos
+        required_fields = [
+            "nombre", "categoria_timing", "categoria_funcion", "dificultad",
+            "tiempo_prep", "porciones", "ingredientes", "preparacion",
+            "macros_por_porcion", "meal_prep_tips", "timing_consumo"
         ]
         
-        warnings = []
+        present_fields = []
+        missing_fields = []
         
-        for ingredient in ingredients:
-            ingredient_text = ""
-            if isinstance(ingredient, dict):
-                ingredient_text = ingredient.get("item", "").lower()
-            elif isinstance(ingredient, str):
-                ingredient_text = ingredient.lower()
+        for field in required_fields:
+            if field in recipe_data and recipe_data[field]:
+                present_fields.append(field)
+            else:
+                missing_fields.append(field)
+        
+        details["required_fields"] = required_fields
+        details["missing_fields"] = missing_fields
+        
+        # Calcular completitud
+        completeness_percentage = (len(present_fields) / len(required_fields)) * 100
+        details["completeness_percentage"] = round(completeness_percentage, 1)
+        
+        # Validaciones específicas
+        validation_bonus = 0
+        
+        # Ingredientes deben tener estructura completa
+        ingredients = recipe_data.get("ingredientes", [])
+        if ingredients:
+            complete_ingredients = 0
+            for ingredient in ingredients:
+                if all(key in ingredient for key in ["nombre", "cantidad", "unidad"]):
+                    complete_ingredients += 1
             
-            for uncommon in uncommon_ingredients:
-                if uncommon in ingredient_text:
-                    warnings.append(f"Ingrediente poco común en España: {ingredient_text}")
+            if complete_ingredients == len(ingredients):
+                validation_bonus += 20
+            elif complete_ingredients >= len(ingredients) * 0.8:
+                validation_bonus += 10
         
-        return {
-            "valid": len(warnings) <= 1,  # Máximo 1 ingrediente poco común
-            "warnings": warnings
+        # Macros deben estar completos
+        macros = recipe_data.get("macros_por_porcion", {})
+        required_macros = ["calorias", "proteinas", "carbohidratos", "grasas"]
+        if all(macro in macros for macro in required_macros):
+            validation_bonus += 20
+        
+        # Preparación debe tener pasos detallados
+        preparation = recipe_data.get("preparacion", [])
+        if preparation and len(preparation) >= 3:
+            validation_bonus += 10
+        
+        score = completeness_percentage + validation_bonus
+        
+        return int(min(100, score)), details
+    
+    def _normalize_ingredient_name(self, name: str) -> str:
+        """
+        Normalizar nombre de ingrediente para comparación
+        """
+        # Convertir a minúsculas
+        normalized = name.lower()
+        
+        # Remover acentos básicos
+        replacements = {
+            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+            'ñ': 'n', 'ü': 'u'
         }
+        
+        for accented, normal in replacements.items():
+            normalized = normalized.replace(accented, normal)
+        
+        # Remover espacios extra y caracteres especiales
+        normalized = re.sub(r'[^a-z0-9\s]', '', normalized)
+        normalized = re.sub(r'\s+', '_', normalized.strip())
+        
+        return normalized
     
-    def _calculate_macro_percentage(self, macros: Dict, macro_type: str) -> float:
-        """Calcular porcentaje de calorías de un macronutriente"""
-        
-        total_calories = macros.get("calories", 0)
-        if total_calories == 0:
-            return 0
-        
-        macro_grams = macros.get(macro_type, 0)
-        macro_calories = macro_grams * self.macro_calories.get(macro_type, 4)
-        
-        return (macro_calories / total_calories) * 100
+    def _identify_ingredient_category(self, normalized_name: str) -> Optional[str]:
+        """
+        Identificar categoría de ingrediente
+        """
+        for main_category, subcategories in self.natural_ingredients.items():
+            for subcat, ingredients in subcategories.items():
+                if any(ingredient in normalized_name for ingredient in ingredients):
+                    return main_category
+        return None
     
-    def _calculate_score(self, validation_details: Dict) -> int:
-        """Calcular puntuación total de validación (0-100)"""
+    def _generate_recommendations(self, validation_result: Dict) -> List[str]:
+        """
+        Generar recomendaciones basadas en los resultados de validación
+        """
+        recommendations = []
+        scores = validation_result["category_scores"]
         
-        score = 100
+        # Recomendaciones por categoría baja
+        if scores.get("ingredients", 0) < 70:
+            recommendations.append(
+                "🥗 Reemplaza ingredientes procesados por alternativas naturales"
+            )
+            recommendations.append(
+                "🌿 Incluye más variedad de categorías: proteínas, carbohidratos, grasas saludables"
+            )
         
-        # Penalizaciones por errores estructurales
-        if not validation_details.get("structure", {}).get("valid", True):
-            score -= 30
+        if scores.get("nutrition", 0) < 70:
+            recommendations.append(
+                "⚖️ Ajusta las proporciones de macronutrientes para mejor balance"
+            )
+            recommendations.append(
+                "🔢 Verifica que las calorías calculadas coincidan con los macros"
+            )
         
-        # Penalizaciones por ingredientes no naturales
-        ingredients_data = validation_details.get("ingredients", {})
-        natural_percentage = ingredients_data.get("natural_percentage", 100)
-        if natural_percentage < 100:
-            score -= (100 - natural_percentage) * 0.5
+        if scores.get("timing", 0) < 70:
+            recommendations.append(
+                "⏰ Ajusta la composición nutricional según el timing de consumo"
+            )
+            recommendations.append(
+                "🎯 Considera los objetivos específicos de esta categoría de timing"
+            )
         
-        # Penalizaciones por macros fuera de rango
-        macros_warnings = len(validation_details.get("macros", {}).get("warnings", []))
-        score -= macros_warnings * 10
+        if scores.get("meal_prep", 0) < 70:
+            recommendations.append(
+                "📦 Simplifica la preparación para hacer la receta más práctica"
+            )
+            recommendations.append(
+                "❄️ Agrega consejos específicos de conservación y almacenamiento"
+            )
         
-        # Penalizaciones por incoherencias nutricionales
-        nutritional_warnings = len(validation_details.get("nutritional", {}).get("warnings", []))
-        score -= nutritional_warnings * 5
+        if scores.get("completeness", 0) < 70:
+            recommendations.append(
+                "📝 Completa todos los campos requeridos de la receta"
+            )
+            recommendations.append(
+                "📏 Especifica cantidades y unidades precisas para todos los ingredientes"
+            )
         
-        # Penalizaciones por tiempo irealista
-        time_warnings = len(validation_details.get("time", {}).get("warnings", []))
-        score -= time_warnings * 5
+        # Recomendación general
+        overall_score = validation_result["overall_score"]
+        if overall_score >= 90:
+            recommendations.insert(0, "🏆 ¡Excelente receta! Cumple todos los estándares de calidad")
+        elif overall_score >= 80:
+            recommendations.insert(0, "✅ Buena receta con ajustes menores recomendados")
+        elif overall_score >= 70:
+            recommendations.insert(0, "⚠️ Receta aceptable que necesita mejoras importantes")
+        else:
+            recommendations.insert(0, "❌ Receta necesita revisión completa antes de usar")
         
-        # Penalizaciones por ingredientes poco disponibles
-        availability_warnings = len(validation_details.get("availability", {}).get("warnings", []))
-        score -= availability_warnings * 3
-        
-        return max(0, min(100, score))
+        return recommendations[:6]  # Máximo 6 recomendaciones
 
 # Ejemplo de uso
 if __name__ == "__main__":
     validator = RecipeValidator()
     
-    # Receta de ejemplo para testing
+    # Ejemplo de receta para validar
     sample_recipe = {
-        "id": "pollo_quinoa_test",
-        "name": "Pollo con Quinoa",
-        "description": "Proteína completa post-entreno",
-        "timing_category": "post_entreno",
-        "function_category": "sintesis_proteica",
-        "servings": 4,
-        "prep_time_minutes": 45,
-        "complexity": 2,
-        "ingredients": [
-            {"item": "pechuga de pollo", "amount": 400, "unit": "g"},
-            {"item": "quinoa", "amount": 200, "unit": "g"},
-            {"item": "brócoli", "amount": 300, "unit": "g"},
-            {"item": "aceite de oliva virgen", "amount": 20, "unit": "ml"}
+        "nombre": "Pollo mediterráneo con quinoa",
+        "categoria_timing": "post_entreno",
+        "categoria_funcion": "sintesis_proteica",
+        "dificultad": "⭐⭐",
+        "tiempo_prep": 35,
+        "porciones": 4,
+        "ingredientes": [
+            {"nombre": "Pechuga de pollo", "cantidad": 400, "unidad": "g", "categoria": "proteina_animal"},
+            {"nombre": "Quinoa", "cantidad": 200, "unidad": "g", "categoria": "carbohidrato_complejo"},
+            {"nombre": "Aceite de oliva virgen", "cantidad": 30, "unidad": "ml", "categoria": "grasa_saludable"}
         ],
-        "steps": [
-            "Lavar y cortar el pollo",
-            "Cocinar quinoa en agua",
-            "Saltear pollo en aceite de oliva",
-            "Agregar brócoli al vapor",
-            "Mezclar y servir"
+        "preparacion": [
+            "1. Cocinar quinoa según instrucciones del paquete",
+            "2. Salpimentar y cocinar pollo a la plancha",
+            "3. Mezclar con aceite de oliva y servir"
         ],
-        "macros_per_serving": {
-            "protein": 35,
-            "carbs": 40,
-            "fat": 12,
-            "calories": 380
-        }
-    }
-    
-    target_macros = {
-        "protein": 35,
-        "carbs": 42,
-        "fat": 10,
-        "calories": 375
+        "macros_por_porcion": {
+            "calorias": 380,
+            "proteinas": 35,
+            "carbohidratos": 28,
+            "grasas": 12,
+            "fibra": 4
+        },
+        "meal_prep_tips": [
+            "Se conserva 4-5 días en refrigerador",
+            "Separar salsa para mantener textura"
+        ],
+        "timing_consumo": "Inmediatamente después del entrenamiento"
     }
     
     # Validar receta
-    result = validator.validate_recipe(sample_recipe, target_macros)
+    result = validator.validate_recipe(sample_recipe)
     
     print("=== RESULTADO DE VALIDACIÓN ===")
-    print(f"Válida: {result['is_valid']}")
-    print(f"Puntuación: {result['score']}/100")
-    print(f"Errores: {result['errors']}")
-    print(f"Warnings: {result['warnings']}")
+    print(f"Puntuación total: {result['overall_score']}/100")
+    print(f"Receta válida: {result['is_valid']}")
+    print("\nPuntuaciones por categoría:")
+    for category, score in result['category_scores'].items():
+        print(f"  {category}: {score}/100")
+    
+    print("\nRecomendaciones:")
+    for rec in result['recommendations']:
+        print(f"  - {rec}")

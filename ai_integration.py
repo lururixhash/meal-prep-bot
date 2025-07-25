@@ -1,422 +1,636 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Integración completa con Claude API para generación de recetas
-Sistema que conecta prompts estructurados con validación automática
+Sistema completo de integración con Claude API
+Maneja generación, búsqueda y adaptación de recetas con IA
 """
 
 import json
 import logging
-from typing import Dict, List, Optional, Tuple
-from anthropic import Anthropic
+from typing import Dict, List, Any, Optional, Tuple
+from datetime import datetime
 
+try:
+    from anthropic import Anthropic
+except ImportError:
+    Anthropic = None
+    logging.warning("Anthropic library not available. AI features will be disabled.")
+
+from claude_prompt_system import ClaudePromptSystem
+from recipe_validator import RecipeValidator
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class AIRecipeGenerator:
     
-    def __init__(self, anthropic_api_key: str, prompt_system, validator):
-        self.claude_client = Anthropic(api_key=anthropic_api_key) if anthropic_api_key else None
+    def __init__(self, api_key: str, prompt_system: ClaudePromptSystem, validator: RecipeValidator):
+        self.api_key = api_key
         self.prompt_system = prompt_system
         self.validator = validator
         
-        # Configuración de modelos
-        self.model = "claude-3-5-sonnet-20241022"
-        self.max_tokens = 2000
-        self.temperature = 0.3  # Baja para consistencia nutricional
+        # Inicializar cliente Claude
+        if Anthropic and api_key:
+            try:
+                self.client = Anthropic(api_key=api_key)
+                self.available = True
+                logger.info("✅ AI Recipe Generator initialized successfully")
+            except Exception as e:
+                logger.error(f"❌ Error initializing Claude client: {e}")
+                self.client = None
+                self.available = False
+        else:
+            self.client = None
+            self.available = False
+            logger.warning("⚠️ AI features disabled: No API key or Anthropic library")
         
-        logger.info("🤖 AIRecipeGenerator initialized")
+        # Configuración de la API
+        self.model = "claude-3-5-sonnet-20241022"
+        self.max_tokens = 4000
+        self.temperature = 0.3  # Más determinístico para recetas
+        
+        # Cache para optimizar llamadas
+        self.recipe_cache = {}
+        self.cache_max_size = 100
     
     def generate_recipe(self, user_profile: Dict, request_data: Dict) -> Dict:
         """
-        Generar receta usando Claude API con validación automática
+        Generar receta específica usando Claude API
         """
-        if not self.claude_client:
-            return self._create_error_response("Claude API no disponible")
+        if not self.available:
+            return {
+                "success": False,
+                "error": "AI service not available. Check API key configuration.",
+                "recipe": None,
+                "validation": None
+            }
         
         try:
-            # 1. Crear prompt estructurado
-            prompt_data = self.prompt_system.create_recipe_generation_prompt(
-                user_profile, request_data
-            )
-            formatted_prompt = self.prompt_system.format_prompt_for_api(prompt_data)
+            # Crear prompt estructurado
+            prompt = self.prompt_system.create_recipe_generation_prompt(user_profile, request_data)
             
-            logger.info(f"🔄 Generating recipe for user with {request_data.get('timing_category', 'unknown')} timing")
+            # Verificar cache
+            cache_key = self._generate_cache_key(prompt)
+            if cache_key in self.recipe_cache:
+                logger.info("📋 Using cached recipe")
+                return self.recipe_cache[cache_key]
             
-            # 2. Llamar a Claude API
-            response = self.claude_client.messages.create(
+            # Llamada a Claude API
+            logger.info("🤖 Generating recipe with Claude API...")
+            response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
-                messages=[{
-                    "role": "user", 
-                    "content": formatted_prompt
-                }]
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
             )
             
-            # 3. Parsear respuesta JSON
-            recipe_data = self._parse_claude_response(response.content[0].text)
-            if not recipe_data:
-                return self._create_error_response("Error parsing Claude response")
+            # Extraer contenido de la respuesta
+            response_text = response.content[0].text.strip()
             
-            # 4. Validar receta generada
-            validation_result = self.validator.validate_recipe(
-                recipe_data, 
-                request_data.get('target_macros')
-            )
+            # Validar formato de respuesta
+            validation_result = self.prompt_system.validate_prompt_response(response_text)
             
-            # 5. Si validación falla, intentar regenerar
-            if not validation_result["is_valid"] and validation_result["score"] < 70:
-                logger.warning(f"⚠️ Recipe validation failed (score: {validation_result['score']}), regenerating...")
-                return self._regenerate_with_feedback(
-                    user_profile, request_data, validation_result
-                )
+            if not validation_result["valid"]:
+                logger.error(f"❌ Invalid response format: {validation_result['error']}")
+                
+                # Intentar con prompt de fallback
+                return self._generate_fallback_recipe(user_profile, request_data, validation_result["error"])
             
-            # 6. Crear respuesta exitosa
-            return {
-                "success": True,
+            recipe_data = validation_result["response"]["receta"]
+            
+            # Validar receta con el sistema de validación
+            recipe_validation = self.validator.validate_recipe(recipe_data)
+            
+            # Determinar si la receta es aceptable
+            is_acceptable = recipe_validation["overall_score"] >= 70
+            
+            result = {
+                "success": is_acceptable,
                 "recipe": recipe_data,
-                "validation": validation_result,
-                "message": "Receta generada y validada exitosamente"
+                "validation": recipe_validation,
+                "generation_metadata": {
+                    "model_used": self.model,
+                    "generated_at": datetime.now().isoformat(),
+                    "prompt_tokens": len(prompt.split()),
+                    "response_tokens": len(response_text.split())
+                }
             }
             
+            if not is_acceptable:
+                result["error"] = f"Recipe validation failed. Score: {recipe_validation['overall_score']}/100"
+                
+                # Intentar regenerar con feedback
+                return self._regenerate_with_feedback(user_profile, request_data, recipe_validation)
+            
+            # Guardar en cache si es exitoso
+            self._cache_result(cache_key, result)
+            
+            logger.info(f"✅ Recipe generated successfully. Validation score: {recipe_validation['overall_score']}/100")
+            return result
+            
         except Exception as e:
-            logger.error(f"❌ Error generating recipe: {e}")
-            return self._create_error_response(f"Error generando receta: {str(e)}")
+            logger.error(f"❌ Error generating recipe: {str(e)}")
+            return {
+                "success": False,
+                "error": f"API error: {str(e)}",
+                "recipe": None,
+                "validation": None
+            }
     
     def search_and_adapt_recipes(self, user_profile: Dict, search_query: str) -> Dict:
         """
         Buscar y adaptar recetas existentes según consulta del usuario
         """
-        if not self.claude_client:
-            return self._create_error_response("Claude API no disponible")
+        if not self.available:
+            return {
+                "success": False,
+                "error": "AI service not available",
+                "results": [],
+                "total_found": 0
+            }
         
         try:
-            # 1. Crear prompt de búsqueda
-            prompt_data = self.prompt_system.create_recipe_search_prompt(
-                user_profile, search_query
-            )
-            formatted_prompt = self.prompt_system.format_prompt_for_api(prompt_data)
+            # Crear prompt de búsqueda
+            prompt = self.prompt_system.create_recipe_search_prompt(user_profile, search_query)
             
-            logger.info(f"🔍 Searching recipes for query: '{search_query}'")
+            # Verificar cache
+            cache_key = self._generate_cache_key(f"search_{search_query}_{user_profile['telegram_id']}")
+            if cache_key in self.recipe_cache:
+                logger.info("📋 Using cached search results")
+                return self.recipe_cache[cache_key]
             
-            # 2. Llamar a Claude API
-            response = self.claude_client.messages.create(
+            # Llamada a Claude API
+            logger.info(f"🔍 Searching recipes for: '{search_query}'")
+            response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                temperature=0.4,  # Slightly higher for creativity
-                messages=[{
-                    "role": "user",
-                    "content": formatted_prompt
-                }]
+                temperature=0.4,  # Ligeramente más creativo para búsquedas
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
             )
             
-            # 3. Parsear respuesta
-            search_results = self._parse_search_response(response.content[0].text)
-            if not search_results:
-                return self._create_error_response("No se encontraron recetas relevantes")
+            response_text = response.content[0].text.strip()
             
-            # 4. Validar cada receta encontrada
+            # Parsear respuesta JSON
+            try:
+                search_results = json.loads(response_text)
+            except json.JSONDecodeError:
+                logger.error("❌ Failed to parse search response as JSON")
+                return self._fallback_search_response(search_query)
+            
+            # Validar cada receta encontrada
             validated_results = []
-            for result in search_results.get("recetas_encontradas", []):
-                recipe = result.get("adaptacion_propuesta")
+            
+            for result in search_results.get("resultados", []):
+                recipe = result.get("receta")
                 if recipe:
                     validation = self.validator.validate_recipe(recipe)
-                    result["validation"] = validation
-                    if validation["score"] >= 60:  # Más permisivo para búsquedas
+                    
+                    # Solo incluir recetas con puntuación aceptable
+                    if validation["overall_score"] >= 60:  # Umbral más bajo para búsquedas
+                        result["validation"] = validation
                         validated_results.append(result)
             
-            return {
-                "success": True,
+            final_result = {
+                "success": len(validated_results) > 0,
                 "results": validated_results,
                 "total_found": len(validated_results),
-                "query": search_query,
-                "message": f"Se encontraron {len(validated_results)} recetas válidas"
+                "query_interpretation": search_results.get("interpretacion_consulta", search_query),
+                "search_metadata": {
+                    "original_query": search_query,
+                    "model_used": self.model,
+                    "searched_at": datetime.now().isoformat()
+                }
             }
             
+            if len(validated_results) == 0:
+                final_result["error"] = "No recipes found matching criteria and validation standards"
+            
+            # Guardar en cache
+            self._cache_result(cache_key, final_result)
+            
+            logger.info(f"✅ Search completed. Found {len(validated_results)} valid recipes")
+            return final_result
+            
         except Exception as e:
-            logger.error(f"❌ Error searching recipes: {e}")
-            return self._create_error_response(f"Error buscando recetas: {str(e)}")
+            logger.error(f"❌ Error in recipe search: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Search error: {str(e)}",
+                "results": [],
+                "total_found": 0
+            }
     
-    def generate_weekly_menu(self, user_profile: Dict, variety_preferences: Dict) -> Dict:
+    def generate_weekly_menu(self, user_profile: Dict, week_preferences: Dict) -> Dict:
         """
-        Generar menú semanal completo con variedad configurable
+        Generar menú semanal completo con IA
         """
-        if not self.claude_client:
-            return self._create_error_response("Claude API no disponible")
+        if not self.available:
+            return {
+                "success": False,
+                "error": "AI service not available",
+                "menu": None
+            }
         
         try:
-            # 1. Crear prompt de menú semanal
-            prompt_data = self.prompt_system.create_weekly_menu_prompt(
-                user_profile, variety_preferences
-            )
-            formatted_prompt = self.prompt_system.format_prompt_for_api(prompt_data)
+            # Crear prompt de menú semanal
+            prompt = self.prompt_system.create_menu_generation_prompt(user_profile, week_preferences)
             
-            logger.info(f"📅 Generating weekly menu for user (variety level: {user_profile['settings']['variety_level']})")
-            
-            # 2. Llamar a Claude API con más tokens para menú completo
-            response = self.claude_client.messages.create(
+            logger.info("📅 Generating weekly menu with Claude API...")
+            response = self.client.messages.create(
                 model=self.model,
-                max_tokens=4000,  # Más tokens para menú semanal
-                temperature=0.5,   # Más creatividad para variedad
-                messages=[{
-                    "role": "user",
-                    "content": formatted_prompt
-                }]
+                max_tokens=6000,  # Más tokens para menú completo
+                temperature=0.4,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
             )
             
-            # 3. Parsear menú semanal
-            menu_data = self._parse_menu_response(response.content[0].text)
-            if not menu_data:
-                return self._create_error_response("Error generando menú semanal")
+            response_text = response.content[0].text.strip()
             
-            # 4. Validar recetas del menú
-            validated_menu = self._validate_weekly_menu(menu_data)
-            
-            return {
-                "success": True,
-                "weekly_menu": validated_menu,
-                "variety_level": user_profile['settings']['variety_level'],
-                "cooking_schedule": user_profile['settings']['cooking_schedule'],
-                "message": "Menú semanal generado exitosamente"
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Error generating weekly menu: {e}")
-            return self._create_error_response(f"Error generando menú: {str(e)}")
-    
-    def generate_complements_for_day(self, user_profile: Dict, daily_macros_current: Dict) -> Dict:
-        """
-        Generar complementos específicos para completar macros del día
-        """
-        if not self.claude_client:
-            return self._create_error_response("Claude API no disponible")
-        
-        try:
-            # 1. Crear prompt de complementos
-            prompt_data = self.prompt_system.create_complement_suggestion_prompt(
-                user_profile, daily_macros_current
-            )
-            formatted_prompt = self.prompt_system.format_prompt_for_api(prompt_data)
-            
-            logger.info("🥜 Generating complements to complete daily macros")
-            
-            # 2. Llamar a Claude API
-            response = self.claude_client.messages.create(
-                model=self.model,
-                max_tokens=1500,
-                temperature=0.3,
-                messages=[{
-                    "role": "user",
-                    "content": formatted_prompt
-                }]
-            )
-            
-            # 3. Parsear complementos
-            complements_data = self._parse_complements_response(response.content[0].text)
-            if not complements_data:
-                return self._create_error_response("Error generando complementos")
-            
-            return {
-                "success": True,
-                "complements": complements_data,
-                "message": "Complementos calculados para completar macros"
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Error generating complements: {e}")
-            return self._create_error_response(f"Error generando complementos: {str(e)}")
-    
-    def _parse_claude_response(self, response_text: str) -> Optional[Dict]:
-        """Parsear respuesta JSON de Claude"""
-        try:
-            # Buscar JSON en la respuesta
-            json_start = response_text.find('{')
-            json_end = response_text.rfind('}') + 1
-            
-            if json_start == -1 or json_end == 0:
-                logger.error("No JSON found in Claude response")
-                return None
-            
-            json_text = response_text[json_start:json_end]
-            return json.loads(json_text)
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Error parsing Claude response: {e}")
-            return None
-    
-    def _parse_search_response(self, response_text: str) -> Optional[Dict]:
-        """Parsear respuesta de búsqueda de recetas"""
-        return self._parse_claude_response(response_text)
-    
-    def _parse_menu_response(self, response_text: str) -> Optional[Dict]:
-        """Parsear respuesta de menú semanal"""
-        return self._parse_claude_response(response_text)
-    
-    def _parse_complements_response(self, response_text: str) -> Optional[Dict]:
-        """Parsear respuesta de complementos"""
-        return self._parse_claude_response(response_text)
-    
-    def _regenerate_with_feedback(self, user_profile: Dict, request_data: Dict, validation_result: Dict) -> Dict:
-        """Regenerar receta con feedback de validación"""
-        try:
-            # Agregar feedback de validación al prompt
-            feedback_prompt = self._create_feedback_prompt(validation_result)
-            
-            # Modificar request_data con feedback
-            enhanced_request = request_data.copy()
-            enhanced_request["validation_feedback"] = feedback_prompt
-            
-            # Intentar una vez más
-            prompt_data = self.prompt_system.create_recipe_generation_prompt(
-                user_profile, enhanced_request
-            )
-            formatted_prompt = self.prompt_system.format_prompt_for_api(prompt_data)
-            
-            response = self.claude_client.messages.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                temperature=0.2,  # Más conservador en regeneración
-                messages=[{
-                    "role": "user",
-                    "content": formatted_prompt + f"\n\nCORRECCIONES NECESARIAS:\n{feedback_prompt}"
-                }]
-            )
-            
-            recipe_data = self._parse_claude_response(response.content[0].text)
-            if recipe_data:
-                new_validation = self.validator.validate_recipe(recipe_data, request_data.get('target_macros'))
+            try:
+                menu_data = json.loads(response_text)
+            except json.JSONDecodeError:
+                logger.error("❌ Failed to parse menu response as JSON")
                 return {
-                    "success": True,
-                    "recipe": recipe_data,
-                    "validation": new_validation,
-                    "message": f"Receta regenerada (score: {new_validation['score']}/100)"
+                    "success": False,
+                    "error": "Invalid menu format received from AI",
+                    "menu": None
                 }
             
+            # Validar menú (implementar validaciones específicas)
+            menu_validation = self._validate_weekly_menu(menu_data)
+            
+            result = {
+                "success": menu_validation["valid"],
+                "menu": menu_data.get("menu_semanal"),
+                "validation": menu_validation,
+                "generation_metadata": {
+                    "model_used": self.model,
+                    "generated_at": datetime.now().isoformat(),
+                    "week_preferences": week_preferences
+                }
+            }
+            
+            if not menu_validation["valid"]:
+                result["error"] = f"Menu validation failed: {menu_validation['error']}"
+            
+            logger.info(f"✅ Weekly menu generated. Valid: {menu_validation['valid']}")
+            return result
+            
         except Exception as e:
-            logger.error(f"Error in regeneration: {e}")
-        
-        # Si falla la regeneración, devolver error
-        return self._create_error_response("No se pudo generar una receta válida tras múltiples intentos")
+            logger.error(f"❌ Error generating weekly menu: {str(e)}")
+            return {
+                "success": False,
+                "error": f"Menu generation error: {str(e)}",
+                "menu": None
+            }
     
-    def _create_feedback_prompt(self, validation_result: Dict) -> str:
-        """Crear prompt de feedback basado en errores de validación"""
-        feedback = []
-        
-        if validation_result.get("errors"):
-            feedback.append("ERRORES CRÍTICOS:")
-            for error in validation_result["errors"]:
-                feedback.append(f"- {error}")
-        
-        if validation_result.get("warnings"):
-            feedback.append("WARNINGS:")
-            for warning in validation_result["warnings"]:
-                feedback.append(f"- {warning}")
-        
-        # Feedback específico por categoría
-        details = validation_result.get("details", {})
-        
-        if not details.get("ingredients", {}).get("valid", True):
-            feedback.append("- Usar solo ingredientes naturales, evitar procesados")
-        
-        if not details.get("macros", {}).get("valid", True):
-            feedback.append("- Ajustar macronutrientes para estar dentro del rango objetivo")
-        
-        return "\n".join(feedback)
+    def _generate_fallback_recipe(self, user_profile: Dict, request_data: Dict, original_error: str) -> Dict:
+        """
+        Generar receta usando prompt de fallback más simple
+        """
+        try:
+            logger.info("🔄 Attempting fallback recipe generation...")
+            
+            fallback_prompt = self.prompt_system.get_fallback_prompt(request_data)
+            
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=2000,
+                temperature=0.2,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": fallback_prompt
+                    }
+                ]
+            )
+            
+            response_text = response.content[0].text.strip()
+            
+            try:
+                recipe_data = json.loads(response_text)["receta"]
+                validation = self.validator.validate_recipe(recipe_data)
+                
+                return {
+                    "success": validation["overall_score"] >= 60,  # Umbral más bajo para fallback
+                    "recipe": recipe_data,
+                    "validation": validation,
+                    "fallback_used": True,
+                    "original_error": original_error
+                }
+                
+            except (json.JSONDecodeError, KeyError):
+                logger.error("❌ Fallback recipe generation also failed")
+                return self._create_emergency_recipe(request_data)
+                
+        except Exception as e:
+            logger.error(f"❌ Fallback generation error: {str(e)}")
+            return self._create_emergency_recipe(request_data)
     
-    def _validate_weekly_menu(self, menu_data: Dict) -> Dict:
-        """Validar todas las recetas del menú semanal"""
-        validated_menu = menu_data.copy()
-        
-        for day, day_data in menu_data.get("menu_semanal", {}).items():
-            if "comida_principal" in day_data:
-                recipe = day_data["comida_principal"]
-                if isinstance(recipe, dict):
-                    validation = self.validator.validate_recipe(recipe)
-                    day_data["validation"] = validation
-        
-        return validated_menu
+    def _regenerate_with_feedback(self, user_profile: Dict, request_data: Dict, validation_result: Dict) -> Dict:
+        """
+        Regenerar receta incorporando feedback de validación
+        """
+        try:
+            logger.info("🔄 Regenerating recipe with validation feedback...")
+            
+            # Crear prompt con feedback específico
+            feedback_items = validation_result.get("recommendations", [])
+            feedback_text = "\n".join(f"- {item}" for item in feedback_items[:3])
+            
+            original_prompt = self.prompt_system.create_recipe_generation_prompt(user_profile, request_data)
+            
+            feedback_prompt = f"""{original_prompt}
+
+IMPORTANTE: La receta anterior tuvo problemas de validación. CORRIGE estos aspectos específicamente:
+
+{feedback_text}
+
+GENERA UNA NUEVA RECETA que resuelva estos problemas manteniendo todos los demás criterios.
+"""
+            
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                temperature=0.2,  # Más determinístico para correcciones
+                messages=[
+                    {
+                        "role": "user",
+                        "content": feedback_prompt
+                    }
+                ]
+            )
+            
+            response_text = response.content[0].text.strip()
+            validation_result = self.prompt_system.validate_prompt_response(response_text)
+            
+            if validation_result["valid"]:
+                recipe_data = validation_result["response"]["receta"]
+                new_validation = self.validator.validate_recipe(recipe_data)
+                
+                return {
+                    "success": new_validation["overall_score"] >= 70,
+                    "recipe": recipe_data,
+                    "validation": new_validation,
+                    "regenerated": True
+                }
+            else:
+                return self._create_emergency_recipe(request_data)
+                
+        except Exception as e:
+            logger.error(f"❌ Regeneration error: {str(e)}")
+            return self._create_emergency_recipe(request_data)
     
-    def _create_error_response(self, error_message: str) -> Dict:
-        """Crear respuesta de error estándar"""
+    def _create_emergency_recipe(self, request_data: Dict) -> Dict:
+        """
+        Crear receta de emergencia predefinida cuando falla la IA
+        """
+        timing_category = request_data.get("timing_category", "comida_principal")
+        target_macros = request_data.get("target_macros", {"calories": 400, "protein": 25, "carbs": 40, "fat": 15})
+        
+        emergency_recipes = {
+            "pre_entreno": {
+                "nombre": "Tostada con miel y plátano",
+                "ingredientes": [
+                    {"nombre": "Pan integral", "cantidad": 60, "unidad": "g"},
+                    {"nombre": "Plátano maduro", "cantidad": 100, "unidad": "g"},
+                    {"nombre": "Miel natural", "cantidad": 15, "unidad": "g"}
+                ],
+                "preparacion": [
+                    "1. Tostar el pan integral",
+                    "2. Cortar el plátano en rodajas",
+                    "3. Agregar miel por encima"
+                ]
+            },
+            "post_entreno": {
+                "nombre": "Batido de proteína con avena",
+                "ingredientes": [
+                    {"nombre": "Yogur griego natural", "cantidad": 200, "unidad": "g"},
+                    {"nombre": "Avena integral", "cantidad": 40, "unidad": "g"},
+                    {"nombre": "Plátano", "cantidad": 100, "unidad": "g"},
+                    {"nombre": "Almendras", "cantidad": 20, "unidad": "g"}
+                ],
+                "preparacion": [
+                    "1. Mezclar todos los ingredientes",
+                    "2. Batir hasta obtener consistencia cremosa",
+                    "3. Servir inmediatamente"
+                ]
+            },
+            "comida_principal": {
+                "nombre": "Pollo con arroz integral y verduras",
+                "ingredientes": [
+                    {"nombre": "Pechuga de pollo", "cantidad": 150, "unidad": "g"},
+                    {"nombre": "Arroz integral", "cantidad": 80, "unidad": "g"},
+                    {"nombre": "Brócoli", "cantidad": 150, "unidad": "g"},
+                    {"nombre": "Aceite de oliva", "cantidad": 15, "unidad": "ml"}
+                ]
+            }
+        }
+        
+        base_recipe = emergency_recipes.get(timing_category, emergency_recipes["comida_principal"])
+        
+        emergency_recipe = {
+            **base_recipe,
+            "categoria_timing": timing_category,
+            "categoria_funcion": "emergency_fallback",
+            "dificultad": "⭐",
+            "tiempo_prep": 15,
+            "porciones": 1,
+            "macros_por_porcion": target_macros,
+            "meal_prep_tips": ["Receta de emergencia - preparar al momento"],
+            "timing_consumo": "Según timing solicitado"
+        }
+        
+        validation = {"overall_score": 60, "is_valid": True, "emergency_recipe": True}
+        
+        return {
+            "success": True,
+            "recipe": emergency_recipe,
+            "validation": validation,
+            "emergency_fallback": True,
+            "error": "AI generation failed, using emergency recipe"
+        }
+    
+    def _fallback_search_response(self, search_query: str) -> Dict:
+        """
+        Respuesta de fallback para búsquedas fallidas
+        """
         return {
             "success": False,
-            "error": error_message,
-            "message": f"❌ {error_message}"
+            "results": [],
+            "total_found": 0,
+            "error": f"Search failed for query: '{search_query}'. Try simpler terms or check your connection.",
+            "suggestions": [
+                "Intenta términos más simples (ej: 'pollo' en lugar de 'pollo al curry')",
+                "Especifica el timing (ej: 'post entreno')",
+                "Menciona ingredientes principales"
+            ]
+        }
+    
+    def _validate_weekly_menu(self, menu_data: Dict) -> Dict:
+        """
+        Validar estructura y contenido del menú semanal
+        """
+        try:
+            menu_semanal = menu_data.get("menu_semanal", {})
+            
+            required_fields = ["semana", "objetivo_usuario", "calorias_diarias", "distribuciones_diarias"]
+            missing_fields = [field for field in required_fields if field not in menu_semanal]
+            
+            if missing_fields:
+                return {
+                    "valid": False,
+                    "error": f"Missing required fields: {', '.join(missing_fields)}"
+                }
+            
+            distribuciones = menu_semanal.get("distribuciones_diarias", {})
+            required_days = ["lunes", "martes", "miercoles", "jueves", "viernes"]
+            
+            for day in required_days:
+                if day not in distribuciones:
+                    return {
+                        "valid": False,
+                        "error": f"Missing day: {day}"
+                    }
+            
+            return {
+                "valid": True,
+                "days_included": len(distribuciones),
+                "total_recipes": sum(len(day_data.get("desayuno", {}).get("recetas", [])) + 
+                                    len(day_data.get("almuerzo", {}).get("recetas", [])) +
+                                    len(day_data.get("cena", {}).get("recetas", []))
+                                   for day_data in distribuciones.values())
+            }
+            
+        except Exception as e:
+            return {
+                "valid": False,
+                "error": f"Menu validation error: {str(e)}"
+            }
+    
+    def _generate_cache_key(self, content: str) -> str:
+        """
+        Generar clave de cache basada en el contenido
+        """
+        import hashlib
+        return hashlib.md5(content.encode()).hexdigest()[:16]
+    
+    def _cache_result(self, cache_key: str, result: Dict) -> None:
+        """
+        Guardar resultado en cache con límite de tamaño
+        """
+        if len(self.recipe_cache) >= self.cache_max_size:
+            # Eliminar entrada más antigua
+            oldest_key = next(iter(self.recipe_cache))
+            del self.recipe_cache[oldest_key]
+        
+        self.recipe_cache[cache_key] = result
+    
+    def get_api_status(self) -> Dict:
+        """
+        Obtener estado actual de la API
+        """
+        return {
+            "available": self.available,
+            "model": self.model,
+            "cache_size": len(self.recipe_cache),
+            "has_api_key": bool(self.api_key),
+            "anthropic_library": Anthropic is not None
         }
 
-# Funciones de utilidad para integración con el bot
-def format_recipe_for_display(recipe_data: Dict, validation_result: Dict) -> str:
-    """Formatear receta para mostrar en Telegram"""
-    recipe = recipe_data
-    macros = recipe.get("macros_per_serving", {})
-    
-    text = f"""
-🍽️ **{recipe.get('name', 'Receta')}**
+def format_recipe_for_display(recipe: Dict, validation: Dict) -> str:
+    """
+    Formatear receta para mostrar en Telegram
+    """
+    try:
+        # Encabezado
+        name = recipe.get("nombre", "Receta sin nombre")
+        difficulty = recipe.get("dificultad", "⭐")
+        prep_time = recipe.get("tiempo_prep", 0)
+        portions = recipe.get("porciones", 1)
+        
+        formatted = f"**{name}**\n"
+        formatted += f"🔧 {difficulty} • ⏱️ {prep_time} min • 🍽️ {portions} porciones\n\n"
+        
+        # Macros
+        macros = recipe.get("macros_por_porcion", {})
+        calories = macros.get("calorias", 0)
+        protein = macros.get("proteinas", 0)
+        carbs = macros.get("carbohidratos", 0)
+        fat = macros.get("grasas", 0)
+        
+        formatted += f"📊 **MACROS POR PORCIÓN:**\n"
+        formatted += f"🔥 {calories} kcal • 🥩 {protein}g prot • 🍞 {carbs}g carbs • 🥑 {fat}g grasas\n\n"
+        
+        # Ingredientes
+        ingredients = recipe.get("ingredientes", [])
+        if ingredients:
+            formatted += "🛒 **INGREDIENTES:**\n"
+            for ingredient in ingredients:
+                name = ingredient.get("nombre", "")
+                quantity = ingredient.get("cantidad", 0)
+                unit = ingredient.get("unidad", "")
+                formatted += f"• {quantity}{unit} {name}\n"
+            formatted += "\n"
+        
+        # Preparación
+        preparation = recipe.get("preparacion", [])
+        if preparation:
+            formatted += "👨🍳 **PREPARACIÓN:**\n"
+            for step in preparation:
+                formatted += f"{step}\n"
+            formatted += "\n"
+        
+        # Timing de consumo
+        timing = recipe.get("timing_consumo", "")
+        if timing:
+            formatted += f"⏰ **CUÁNDO CONSUMIR:** {timing}\n\n"
+        
+        # Tips de meal prep
+        tips = recipe.get("meal_prep_tips", [])
+        if tips:
+            formatted += "📦 **MEAL PREP TIPS:**\n"
+            for tip in tips:
+                formatted += f"• {tip}\n"
+            formatted += "\n"
+        
+        # Score de validación
+        if validation:
+            score = validation.get("overall_score", 0)
+            is_valid = validation.get("is_valid", False)
+            status_emoji = "✅" if is_valid else "⚠️"
+            formatted += f"{status_emoji} **Puntuación de calidad:** {score}/100\n"
+        
+        return formatted
+        
+    except Exception as e:
+        logger.error(f"Error formatting recipe for display: {e}")
+        return f"**Error mostrando receta:** {str(e)}"
 
-📝 **Descripción:** {recipe.get('description', 'N/A')}
-⭐ **Complejidad:** {recipe.get('complexity', 1)} estrellas
-⏱️ **Tiempo:** {recipe.get('prep_time_minutes', 0)} minutos
-🍽️ **Porciones:** {recipe.get('servings', 1)}
-
-**MACROS POR PORCIÓN:**
-🥩 Proteína: {macros.get('protein', 0)}g
-🍞 Carbohidratos: {macros.get('carbs', 0)}g  
-🥑 Grasas: {macros.get('fat', 0)}g
-🔥 **Calorías: {macros.get('calories', 0)} kcal**
-
-**INGREDIENTES:**
-"""
-    
-    for i, ingredient in enumerate(recipe.get('ingredients', []), 1):
-        if isinstance(ingredient, dict):
-            item = ingredient.get('item', '')
-            amount = ingredient.get('amount', '')
-            unit = ingredient.get('unit', '')
-            text += f"{i}. {item}: {amount}{unit}\n"
-        else:
-            text += f"{i}. {ingredient}\n"
-    
-    text += "\n**PREPARACIÓN:**\n"
-    for i, step in enumerate(recipe.get('steps', []), 1):
-        text += f"{i}. {step}\n"
-    
-    # Información de meal prep
-    if recipe.get('meal_prep_notes'):
-        text += f"\n📦 **Meal Prep:** {recipe['meal_prep_notes']}"
-    
-    if recipe.get('storage_instructions'):
-        text += f"\n🥶 **Almacenamiento:** {recipe['storage_instructions']}"
-    
-    # Score de validación
-    score = validation_result.get('score', 0)
-    if score >= 90:
-        text += f"\n✅ **Validación: {score}/100** (Excelente)"
-    elif score >= 70:
-        text += f"\n✅ **Validación: {score}/100** (Buena)"
-    else:
-        text += f"\n⚠️ **Validación: {score}/100** (Mejorable)"
-    
-    return text
-
-# Ejemplo de uso para testing
+# Ejemplo de uso
 if __name__ == "__main__":
-    # Test sin API key real
-    print("🧪 AIRecipeGenerator structure test")
+    # Configuración de ejemplo
+    from claude_prompt_system import ClaudePromptSystem
+    from recipe_validator import RecipeValidator
     
-    # Simulación de datos
-    fake_profile = {
-        "basic_data": {"objetivo": "subir_masa"},
-        "macros": {"protein_g": 150, "carbs_g": 300, "fat_g": 80, "calories": 2400},
-        "settings": {"variety_level": 3, "cooking_schedule": "dos_sesiones"}
-    }
+    prompt_system = ClaudePromptSystem()
+    validator = RecipeValidator()
     
-    fake_request = {
-        "timing_category": "post_entreno",
-        "function_category": "sintesis_proteica",
-        "target_macros": {"protein": 35, "carbs": 40, "fat": 12, "calories": 380}
-    }
+    # Nota: Necesitas tu propia API key de Anthropic
+    ai_generator = AIRecipeGenerator("your-api-key", prompt_system, validator)
     
-    print("✅ AIRecipeGenerator ready for integration")
-    print(f"✅ Sample profile loaded: {fake_profile['basic_data']['objetivo']}")
-    print(f"✅ Sample request: {fake_request['timing_category']}")
+    print(f"AI Generator Status: {ai_generator.get_api_status()}")
