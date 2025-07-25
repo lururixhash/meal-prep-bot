@@ -1,538 +1,35 @@
 {
-  "recipes": {
-    "mediterranean_chicken": {
-      "id": "mediterranean_chicken",
-      "name": "Pollo Mediterráneo",
-      "category": "protein",
-      "servings": 8,
-      "cook_time": "6-8 horas BAJO / 3-4 horas ALTO",
-      "ingredients": [
-        "2 kg pechugas de pollo",
-        "2 latas tomates triturados (800g)",
-        "200g aceitunas kalamata",
-        "200g pimientos rojos asados",
-        "1 cebolla grande",
-        "4 dientes de ajo",
-        "2 cdas alcaparras",
-        "2 cdas oregano seco",
-        "1 cda tomillo seco",
-        "1 cda romero seco",
-        "sal y pimienta al gusto"
-      ],
-      "steps": [
-        "Rociar Crockpot con aceite en spray",
-        "Colocar pechugas de pollo en la base",
-        "Mezclar tomates, aceitunas, pimientos, cebolla picada, ajo picado y alcaparras",
-        "Agregar especias y sazonar con sal y pimienta",
-        "Verter la mezcla sobre el pollo",
-        "Cocinar 6-8h en BAJO o 3-4h en ALTO",
-        "Desmenuzar el pollo y mezclar con la salsa"
-      ],
-      "macros_per_serving": {
-        "protein": 35,
-        "carbs": 8,
-        "fat": 12,
-        "calories": 280
+  "database_version": "2.0",
+  "reset_date": "2025-07-25",
+  "users": {},
+  "global_categories": {
+    "timing": {
+      "pre_entreno": {
+        "energia_rapida": [],
+        "hidratacion": []
       },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["mediterranean", "chicken", "crockpot", "low_carb"],
-      "rotation_week": [1, 2]
-    },
-    "mexican_shredded_beef": {
-      "id": "mexican_shredded_beef",
-      "name": "Carne Deshebrada Mexicana",
-      "category": "protein",
-      "servings": 8,
-      "cook_time": "8-10 horas BAJO / 4-5 horas ALTO",
-      "ingredients": [
-        "2 kg carne de res para guisar (chuck roast)",
-        "2 latas tomates enteros (800g)",
-        "2 chiles chipotle en adobo",
-        "1 cebolla grande",
-        "4 dientes de ajo",
-        "2 cdas comino molido",
-        "2 cdas paprika",
-        "1 cda oregano mexicano",
-        "1 cdta chile en polvo",
-        "sal y pimienta al gusto",
-        "1 taza caldo de res"
-      ],
-      "steps": [
-        "Sazonar la carne con sal, pimienta y especias secas",
-        "Colocar la carne en la Crockpot",
-        "Licuar tomates, chiles chipotle, cebolla y ajo con el caldo",
-        "Verter la salsa sobre la carne",
-        "Cocinar 8-10h en BAJO o 4-5h en ALTO",
-        "Desmenuzar la carne con dos tenedores",
-        "Mezclar bien con los jugos de cocción"
-      ],
-      "macros_per_serving": {
-        "protein": 38,
-        "carbs": 6,
-        "fat": 15,
-        "calories": 320
+      "post_entreno": {
+        "sintesis_proteica": [],
+        "reposicion_glucogeno": []
       },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["mexican", "beef", "crockpot", "spicy"],
-      "rotation_week": [1, 2]
-    },
-    "teriyaki_chicken": {
-      "id": "teriyaki_chicken",
-      "name": "Pollo Teriyaki",
-      "category": "protein",
-      "servings": 8,
-      "cook_time": "4-6 horas BAJO / 2-3 horas ALTO",
-      "ingredients": [
-        "2 kg muslos de pollo deshuesados",
-        "120ml salsa de soja baja en sodio",
-        "60ml miel",
-        "30ml vinagre de arroz",
-        "3 dientes de ajo picados",
-        "2 cdas jengibre fresco rallado",
-        "1 cda aceite de sesamo",
-        "2 cdas maicena",
-        "2 cebollas verdes picadas",
-        "1 cda semillas de sesamo"
-      ],
-      "steps": [
-        "Mezclar salsa de soja, miel, vinagre, ajo, jengibre y aceite de sesamo",
-        "Colocar el pollo en la Crockpot y verter la salsa teriyaki",
-        "Cocinar 4-6h en BAJO o 2-3h en ALTO",
-        "Retirar el pollo y reservar",
-        "Mezclar maicena con agua fria y agregar al liquido de coccion",
-        "Cocinar 15 min mas hasta espesar",
-        "Servir el pollo con la salsa espesa, cebollas verdes y semillas de sesamo"
-      ],
-      "macros_per_serving": {
-        "protein": 32,
-        "carbs": 12,
-        "fat": 18,
-        "calories": 340
+      "comida_principal": {
+        "equilibrio_nutricional": [],
+        "saciedad": []
       },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["asian", "chicken", "crockpot", "sweet"],
-      "rotation_week": [3, 4]
-    },
-    "moroccan_lamb": {
-      "id": "moroccan_lamb",
-      "name": "Cordero Marroquí",
-      "category": "protein",
-      "servings": 8,
-      "cook_time": "6-8 horas BAJO / 3-4 horas ALTO",
-      "ingredients": [
-        "2 kg paleta de cordero en trozos",
-        "2 cebollas grandes",
-        "1 lata tomates triturados (400g)",
-        "200g ciruelas pasas",
-        "100g almendras fileteadas",
-        "4 dientes de ajo",
-        "2 cdas ras el hanout (mezcla de especias marroquies)",
-        "1 cda canela molida",
-        "1 cdta jengibre molido",
-        "2 tazas caldo de cordero o res",
-        "sal y pimienta al gusto"
-      ],
-      "steps": [
-        "Sazonar el cordero con sal, pimienta y especias",
-        "Colocar el cordero en la Crockpot",
-        "Agregar cebollas en rodajas, tomates, ciruelas y almendras",
-        "Verter el caldo sobre todos los ingredientes",
-        "Cocinar 6-8h en BAJO o 3-4h en ALTO",
-        "Ajustar sazon al final de la coccion",
-        "Servir con el jugo de coccion reducido"
-      ],
-      "macros_per_serving": {
-        "protein": 36,
-        "carbs": 15,
-        "fat": 20,
-        "calories": 380
-      },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["moroccan", "lamb", "crockpot", "exotic"],
-      "rotation_week": [3, 4]
-    },
-    "black_beans": {
-      "id": "black_beans",
-      "name": "Frijoles Negros Especiados",
-      "category": "legume",
-      "servings": 8,
-      "cook_time": "6-8 horas BAJO / 3-4 horas ALTO",
-      "ingredients": [
-        "500g frijoles negros secos (remojados 8 horas)",
-        "1 cebolla grande picada",
-        "3 dientes de ajo picados",
-        "1 pimiento verde picado",
-        "2 cdas comino molido",
-        "1 cda oregano seco",
-        "1 hoja de laurel",
-        "1 cdta chile en polvo",
-        "sal y pimienta al gusto",
-        "6 tazas agua o caldo de vegetales"
-      ],
-      "steps": [
-        "Escurrir y enjuagar los frijoles remojados",
-        "Colocar todos los ingredientes en la Crockpot",
-        "Cocinar 6-8h en BAJO o 3-4h en ALTO",
-        "Verificar que los frijoles esten tiernos",
-        "Ajustar sazon y consistencia al final",
-        "Retirar la hoja de laurel antes de servir"
-      ],
-      "macros_per_serving": {
-        "protein": 12,
-        "carbs": 35,
-        "fat": 1,
-        "calories": 195
-      },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["legume", "vegan", "fiber", "protein"],
-      "rotation_week": [1, 2]
-    },
-    "chickpeas": {
-      "id": "chickpeas",
-      "name": "Garbanzos al Curry",
-      "category": "legume",
-      "servings": 8,
-      "cook_time": "6-8 horas BAJO / 3-4 horas ALTO",
-      "ingredients": [
-        "500g garbanzos secos (remojados 8 horas)",
-        "1 lata leche de coco (400ml)",
-        "2 cebollas medianas picadas",
-        "4 dientes de ajo picados",
-        "2 cdas jengibre fresco rallado",
-        "2 cdas curry en polvo",
-        "1 cda curcuma",
-        "1 cdta garam masala",
-        "1 lata tomates triturados (400g)",
-        "sal al gusto",
-        "4 tazas agua"
-      ],
-      "steps": [
-        "Escurrir y enjuagar los garbanzos remojados",
-        "Colocar garbanzos, agua y sal en la Crockpot",
-        "Cocinar 4-5 horas hasta que esten tiernos",
-        "Agregar cebolla, ajo, jengibre y especias",
-        "Añadir tomates y leche de coco",
-        "Cocinar 2-3 horas mas en BAJO",
-        "Ajustar sazon al final"
-      ],
-      "macros_per_serving": {
-        "protein": 10,
-        "carbs": 30,
-        "fat": 8,
-        "calories": 220
-      },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["legume", "curry", "indian", "coconut"],
-      "rotation_week": [1, 2]
-    },
-    "red_lentils": {
-      "id": "red_lentils",
-      "name": "Lentejas Rojas al Limón",
-      "category": "legume",
-      "servings": 8,
-      "cook_time": "3-4 horas BAJO / 2 horas ALTO",
-      "ingredients": [
-        "500g lentejas rojas",
-        "1 cebolla grande picada",
-        "3 dientes de ajo picados",
-        "2 cdas aceite de oliva",
-        "1 cda curcuma",
-        "1 cdta comino molido",
-        "zumo de 2 limones",
-        "zeste de 1 limon",
-        "sal y pimienta al gusto",
-        "5 tazas caldo de verduras",
-        "cilantro fresco picado"
-      ],
-      "steps": [
-        "Enjuagar las lentejas rojas hasta que el agua salga clara",
-        "Colocar lentejas, cebolla, ajo y especias en la Crockpot",
-        "Agregar caldo y aceite de oliva",
-        "Cocinar 3-4h en BAJO o 2h en ALTO",
-        "Las lentejas deben desintegrarse parcialmente",
-        "Agregar zumo y zeste de limon al final",
-        "Decorar con cilantro fresco antes de servir"
-      ],
-      "macros_per_serving": {
-        "protein": 13,
-        "carbs": 28,
-        "fat": 4,
-        "calories": 190
-      },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["legume", "lentils", "mediterranean", "quick"],
-      "rotation_week": [3, 4]
-    },
-    "white_beans": {
-      "id": "white_beans",
-      "name": "Alubias Blancas con Hierbas",
-      "category": "legume",
-      "servings": 8,
-      "cook_time": "6-8 horas BAJO / 3-4 horas ALTO",
-      "ingredients": [
-        "500g alubias blancas secas (remojadas 8 horas)",
-        "2 cebollas medianas picadas",
-        "4 dientes de ajo picados",
-        "2 ramas de apio picadas",
-        "2 zanahorias en dados",
-        "2 cdas romero fresco picado",
-        "2 cdas tomillo fresco",
-        "1 hoja de laurel",
-        "3 cdas aceite de oliva",
-        "sal y pimienta al gusto",
-        "6 tazas caldo de vegetales"
-      ],
-      "steps": [
-        "Escurrir y enjuagar las alubias remojadas",
-        "Colocar alubias y caldo en la Crockpot",
-        "Agregar todas las verduras y hierbas",
-        "Cocinar 6-8h en BAJO o 3-4h en ALTO",
-        "Verificar que las alubias esten tiernas",
-        "Agregar aceite de oliva al final",
-        "Ajustar sazon antes de servir"
-      ],
-      "macros_per_serving": {
-        "protein": 11,
-        "carbs": 32,
-        "fat": 6,
-        "calories": 210
-      },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["legume", "herbs", "mediterranean", "fiber"],
-      "rotation_week": [3, 4]
-    },
-    "quinoa_pilaf": {
-      "id": "quinoa_pilaf",
-      "name": "Quinoa Pilaf con Vegetales",
-      "category": "base",
-      "servings": 8,
-      "cook_time": "2-3 horas BAJO",
-      "ingredients": [
-        "400g quinoa",
-        "800ml caldo de vegetales",
-        "1 cebolla mediana picada",
-        "2 zanahorias en dados",
-        "1 pimiento rojo en dados",
-        "100g guisantes congelados",
-        "2 cdas aceite de oliva",
-        "1 cdta curcuma",
-        "sal y pimienta al gusto",
-        "almendras laminadas para decorar"
-      ],
-      "steps": [
-        "Enjuagar la quinoa hasta que el agua salga clara",
-        "Colocar quinoa, caldo y aceite en la Crockpot",
-        "Agregar cebolla, zanahorias y especias",
-        "Cocinar 2h en BAJO",
-        "Agregar pimiento y guisantes",
-        "Cocinar 30 min mas",
-        "Esponjar con tenedor y decorar con almendras"
-      ],
-      "macros_per_serving": {
-        "protein": 6,
-        "carbs": 45,
-        "fat": 8,
-        "calories": 260
-      },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["quinoa", "pilaf", "vegetables", "gluten_free"],
-      "rotation_week": [1, 2, 3, 4]
-    },
-    "brown_rice": {
-      "id": "brown_rice",
-      "name": "Arroz Integral con Especias",
-      "category": "base",
-      "servings": 8,
-      "cook_time": "3-4 horas BAJO",
-      "ingredients": [
-        "400g arroz integral",
-        "800ml caldo de pollo o vegetales",
-        "1 cebolla pequena picada",
-        "2 dientes de ajo picados",
-        "1 cda aceite de oliva",
-        "1 cdta comino molido",
-        "1/2 cdta canela molida",
-        "sal al gusto",
-        "perejil fresco picado"
-      ],
-      "steps": [
-        "Enjuagar el arroz integral",
-        "Colocar arroz, caldo y aceite en la Crockpot",
-        "Agregar cebolla, ajo y especias",
-        "Cocinar 3-4h en BAJO hasta que este tierno",
-        "Esponjar con tenedor",
-        "Decorar with perejil fresco",
-        "Dejar reposar 10 min antes de servir"
-      ],
-      "macros_per_serving": {
-        "protein": 4,
-        "carbs": 50,
-        "fat": 3,
-        "calories": 240
-      },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["rice", "whole_grain", "spiced", "base"],
-      "rotation_week": [1, 2, 3, 4]
-    },
-    "roasted_vegetables": {
-      "id": "roasted_vegetables",
-      "name": "Vegetales Asados Mixtos",
-      "category": "vegetable",
-      "servings": 8,
-      "cook_time": "Horno 200°C, 45 min",
-      "ingredients": [
-        "2 calabacines en rodajas",
-        "2 berenjenas en dados",
-        "2 pimientos rojos en tiras",
-        "2 cebollas rojas en gajos",
-        "300g brocoli en ramilletes",
-        "300g coliflor en ramilletes",
-        "4 cdas aceite de oliva",
-        "2 cdas hierbas provenzales",
-        "sal y pimienta al gusto"
-      ],
-      "steps": [
-        "Precalentar horno a 200°C",
-        "Cortar todos los vegetales en trozos similares",
-        "Mezclar con aceite, hierbas, sal y pimienta",
-        "Extender en bandejas de horno",
-        "Asar 45 min, removiendo a media coccion",
-        "Los vegetales deben estar dorados y tiernos",
-        "Servir calientes o a temperatura ambiente"
-      ],
-      "macros_per_serving": {
-        "protein": 3,
-        "carbs": 12,
-        "fat": 7,
-        "calories": 110
-      },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["vegetables", "roasted", "mixed", "healthy"],
-      "rotation_week": [1, 2, 3, 4]
-    },
-    "hard_boiled_eggs": {
-      "id": "hard_boiled_eggs",
-      "name": "Huevos Duros Perfectos",
-      "category": "protein",
-      "servings": 12,
-      "cook_time": "12 minutos",
-      "ingredients": [
-        "12 huevos grandes",
-        "agua suficiente para cubrir",
-        "1 cda sal",
-        "hielo para bano frio"
-      ],
-      "steps": [
-        "Colocar huevos en una olla grande",
-        "Cubrir con agua fria y agregar sal",
-        "Llevar a ebullicion fuerte",
-        "Cocinar exactamente 12 minutos",
-        "Transferir inmediatamente a bano de hielo",
-        "Dejar enfriar completamente antes de pelar",
-        "Guardar pelados en refrigerador hasta 1 semana"
-      ],
-      "macros_per_serving": {
-        "protein": 6,
-        "carbs": 0,
-        "fat": 5,
-        "calories": 70
-      },
-      "rating": 0,
-      "favorite": false,
-      "feedback": [],
-      "tags": ["eggs", "protein", "snack", "meal_prep"],
-      "rotation_week": [1, 2, 3, 4]
-    }
-  },
-  "meal_plans": {
-    "week_1_2": {
-      "name": "Mediterráneo/Mexicano",
-      "proteins": ["mediterranean_chicken", "mexican_shredded_beef"],
-      "legumes": ["black_beans", "chickpeas"],
-      "base_components": ["quinoa_pilaf", "brown_rice", "roasted_vegetables", "hard_boiled_eggs"],
-      "description": "Sabores mediterráneos y mexicanos con proteínas magras y legumbres tradicionales"
-    },
-    "week_3_4": {
-      "name": "Asiático/Marroquí",
-      "proteins": ["teriyaki_chicken", "moroccan_lamb"],
-      "legumes": ["red_lentils", "white_beans"],
-      "base_components": ["quinoa_pilaf", "brown_rice", "roasted_vegetables", "hard_boiled_eggs"],
-      "description": "Fusión de sabores asiáticos y marroquíes con especias exóticas"
-    }
-  },
-  "user_preferences": {
-    "dislikes": ["pescado", "mariscos", "cilantro"],
-    "allergies": [],
-    "user_profile": {
-      "peso": 70.0,
-      "altura": 176.0,
-      "edad": 25,
-      "sexo": "masculino",
-      "objetivo": "subir_masa",
-      "actividad_fisica": "moderado",
-      "trabajo_fisico": "oficina",
-      "imc": 22.6,
-      "macros_calculados": {
-        "bmr": 1810,
-        "tdee": 2805,
-        "calories": 3446,
-        "protein": 258,
-        "carbs": 388,
-        "fat": 96
+      "snack_complemento": {
+        "micronutrientes": [],
+        "grasas_saludables": []
       }
-    },
-    "macro_targets": {
-      "protein": 258,
-      "carbs": 388,
-      "fat": 96,
-      "calories": 3446
-    },
-    "current_week": 1,
-    "cooking_schedule": {
-      "saturday": ["black_beans", "mexican_shredded_beef"],
-      "sunday": ["chickpeas", "mediterranean_chicken", "quinoa_pilaf", "brown_rice", "roasted_vegetables", "hard_boiled_eggs"]
-    },
-    "last_rotation": null
+    }
   },
-  "shopping_categories": {
-    "proteinas": ["pollo", "carne", "res", "pechuga", "muslo", "huevo", "huevos"],
-    "legumbres": ["frijoles", "garbanzos", "lentejas", "alubias", "habas"],
-    "cereales": ["arroz", "quinoa", "avena", "pasta", "pan"],
-    "vegetales": ["tomate", "cebolla", "ajo", "pimiento", "calabacín", "brócoli", "espinaca", "zanahoria", "aceitunas", "alcaparras"],
-    "especias": ["sal", "pimienta", "oregano", "tomillo", "romero", "comino", "paprika", "curry"],
-    "lacteos": ["queso", "leche", "yogur", "mantequilla", "feta", "manchego", "griego"],
-    "frutos_secos": ["almendras", "nueces", "avellanas", "pistachos"],
-    "frutas": ["manzana", "pera", "uvas", "higos", "datiles", "pasas"],
-    "otros": ["aceite", "vinagre", "lata", "caldo", "miel", "oliva"]
-  },
-  "complementos_naturales": {
+  "global_complements": {
     "frutos_secos": {
       "almendras_crudas": {
         "id": "almendras_crudas",
         "name": "Almendras Crudas",
         "category": "frutos_secos",
+        "timing_tags": ["snack_complemento"],
+        "function_tags": ["grasas_saludables", "micronutrientes"],
         "portion_size": 30,
         "unit": "g",
         "macros_per_portion": {
@@ -541,6 +38,7 @@
           "fat": 15,
           "calories": 174
         },
+        "complexity": 1,
         "benefits": ["Vitamina E", "Magnesio", "Grasas saludables"],
         "seasonal": false,
         "mediterranean_origin": "España, Italia, Grecia"
@@ -549,6 +47,8 @@
         "id": "nueces",
         "name": "Nueces",
         "category": "frutos_secos",
+        "timing_tags": ["snack_complemento"],
+        "function_tags": ["grasas_saludables", "micronutrientes"],
         "portion_size": 30,
         "unit": "g",
         "macros_per_portion": {
@@ -557,30 +57,17 @@
           "fat": 18,
           "calories": 196
         },
+        "complexity": 1,
         "benefits": ["Omega-3", "Antioxidantes", "Magnesio"],
         "seasonal": false,
         "mediterranean_origin": "Francia, Italia"
-      },
-      "avellanas": {
-        "id": "avellanas",
-        "name": "Avellanas",
-        "category": "frutos_secos",
-        "portion_size": 30,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 4,
-          "carbs": 4,
-          "fat": 17,
-          "calories": 188
-        },
-        "benefits": ["Vitamina E", "Cobre", "Manganeso"],
-        "seasonal": false,
-        "mediterranean_origin": "Turquía, Italia, España"
       },
       "pistachos": {
         "id": "pistachos",
         "name": "Pistachos",
         "category": "frutos_secos",
+        "timing_tags": ["snack_complemento"],
+        "function_tags": ["grasas_saludables", "micronutrientes"],
         "portion_size": 30,
         "unit": "g",
         "macros_per_portion": {
@@ -589,16 +76,38 @@
           "fat": 13,
           "calories": 162
         },
+        "complexity": 1,
         "benefits": ["Potasio", "Vitamina B6", "Antioxidantes"],
         "seasonal": false,
         "mediterranean_origin": "Grecia, Turquía, Italia"
       }
     },
     "frutas_frescas": {
+      "platano": {
+        "id": "platano",
+        "name": "Plátano",
+        "category": "frutas_frescas",
+        "timing_tags": ["pre_entreno", "post_entreno"],
+        "function_tags": ["energia_rapida", "reposicion_glucogeno"],
+        "portion_size": 120,
+        "unit": "g",
+        "macros_per_portion": {
+          "protein": 1,
+          "carbs": 27,
+          "fat": 0,
+          "calories": 105
+        },
+        "complexity": 1,
+        "benefits": ["Potasio", "Vitamina B6", "Energía rápida"],
+        "seasonal": false,
+        "mediterranean_origin": "Universal"
+      },
       "manzana_verde": {
-        "id": "manzana_verde",
+        "id": "manzana_verde", 
         "name": "Manzana Verde",
         "category": "frutas_frescas",
+        "timing_tags": ["snack_complemento"],
+        "function_tags": ["micronutrientes"],
         "portion_size": 150,
         "unit": "g",
         "macros_per_portion": {
@@ -607,146 +116,19 @@
           "fat": 0,
           "calories": 78
         },
+        "complexity": 1,
         "benefits": ["Fibra", "Vitamina C", "Antioxidantes"],
         "seasonal": false,
         "mediterranean_origin": "Universal"
-      },
-      "pera": {
-        "id": "pera",
-        "name": "Pera",
-        "category": "frutas_frescas",
-        "portion_size": 150,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 1,
-          "carbs": 23,
-          "fat": 0,
-          "calories": 87
-        },
-        "benefits": ["Fibra", "Vitamina C", "Potasio"],
-        "seasonal": true,
-        "mediterranean_origin": "Universal"
-      },
-      "uvas": {
-        "id": "uvas",
-        "name": "Uvas",
-        "category": "frutas_frescas",
-        "portion_size": 100,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 1,
-          "carbs": 16,
-          "fat": 0,
-          "calories": 69
-        },
-        "benefits": ["Antioxidantes", "Resveratrol", "Potasio"],
-        "seasonal": true,
-        "mediterranean_origin": "Francia, Italia, España, Grecia"
-      },
-      "higos_frescos": {
-        "id": "higos_frescos",
-        "name": "Higos Frescos",
-        "category": "frutas_frescas",
-        "portion_size": 100,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 1,
-          "carbs": 19,
-          "fat": 0,
-          "calories": 74
-        },
-        "benefits": ["Fibra", "Potasio", "Calcio"],
-        "seasonal": true,
-        "mediterranean_origin": "Turquía, Grecia, España"
-      }
-    },
-    "frutas_secas": {
-      "datiles": {
-        "id": "datiles",
-        "name": "Dátiles",
-        "category": "frutas_secas",
-        "portion_size": 25,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 1,
-          "carbs": 18,
-          "fat": 0,
-          "calories": 66
-        },
-        "benefits": ["Fibra", "Potasio", "Antioxidantes"],
-        "seasonal": false,
-        "mediterranean_origin": "Norte de África, Oriente Medio"
-      },
-      "higos_secos": {
-        "id": "higos_secos",
-        "name": "Higos Secos",
-        "category": "frutas_secas",
-        "portion_size": 30,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 1,
-          "carbs": 19,
-          "fat": 0,
-          "calories": 74
-        },
-        "benefits": ["Fibra", "Calcio", "Hierro"],
-        "seasonal": false,
-        "mediterranean_origin": "Turquía, Grecia"
-      },
-      "pasas": {
-        "id": "pasas",
-        "name": "Pasas",
-        "category": "frutas_secas",
-        "portion_size": 25,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 1,
-          "carbs": 19,
-          "fat": 0,
-          "calories": 77
-        },
-        "benefits": ["Hierro", "Potasio", "Antioxidantes"],
-        "seasonal": false,
-        "mediterranean_origin": "España, Grecia, Turquía"
       }
     },
     "lacteos_naturales": {
-      "queso_feta": {
-        "id": "queso_feta",
-        "name": "Queso Feta",
-        "category": "lacteos_naturales",
-        "portion_size": 30,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 4,
-          "carbs": 1,
-          "fat": 6,
-          "calories": 75
-        },
-        "benefits": ["Calcio", "Probióticos", "Proteína completa"],
-        "seasonal": false,
-        "mediterranean_origin": "Grecia"
-      },
-      "queso_manchego": {
-        "id": "queso_manchego",
-        "name": "Queso Manchego",
-        "category": "lacteos_naturales",
-        "portion_size": 30,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 8,
-          "carbs": 0,
-          "fat": 8,
-          "calories": 105
-        },
-        "benefits": ["Calcio", "Proteína", "Vitamina B12"],
-        "seasonal": false,
-        "mediterranean_origin": "España"
-      },
       "yogur_griego": {
         "id": "yogur_griego",
         "name": "Yogur Griego Natural",
         "category": "lacteos_naturales",
+        "timing_tags": ["post_entreno", "snack_complemento"],
+        "function_tags": ["sintesis_proteica", "micronutrientes"],
         "portion_size": 150,
         "unit": "g",
         "macros_per_portion": {
@@ -755,118 +137,134 @@
           "fat": 10,
           "calories": 130
         },
+        "complexity": 1,
         "benefits": ["Probióticos", "Proteína", "Calcio"],
         "seasonal": false,
         "mediterranean_origin": "Grecia"
-      }
-    },
-    "aceitunas_encurtidos": {
-      "aceitunas_kalamata": {
-        "id": "aceitunas_kalamata",
-        "name": "Aceitunas Kalamata",
-        "category": "aceitunas_encurtidos",
-        "portion_size": 20,
+      },
+      "queso_feta": {
+        "id": "queso_feta",
+        "name": "Queso Feta",
+        "category": "lacteos_naturales",
+        "timing_tags": ["comida_principal", "snack_complemento"],
+        "function_tags": ["sintesis_proteica", "grasas_saludables"],
+        "portion_size": 30,
         "unit": "g",
         "macros_per_portion": {
-          "protein": 0,
+          "protein": 4,
           "carbs": 1,
-          "fat": 3,
-          "calories": 30
+          "fat": 6,
+          "calories": 75
         },
-        "benefits": ["Grasas monoinsaturadas", "Vitamina E", "Antioxidantes"],
+        "complexity": 1,
+        "benefits": ["Calcio", "Probióticos", "Proteína completa"],
         "seasonal": false,
         "mediterranean_origin": "Grecia"
-      },
-      "aceitunas_verdes": {
-        "id": "aceitunas_verdes",
-        "name": "Aceitunas Verdes",
-        "category": "aceitunas_encurtidos",
-        "portion_size": 20,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 0,
-          "carbs": 1,
-          "fat": 3,
-          "calories": 29
-        },
-        "benefits": ["Grasas saludables", "Hierro", "Vitamina E"],
-        "seasonal": false,
-        "mediterranean_origin": "España, Italia, Grecia"
-      }
-    },
-    "otros_naturales": {
-      "miel_cruda": {
-        "id": "miel_cruda",
-        "name": "Miel Cruda",
-        "category": "otros_naturales",
-        "portion_size": 15,
-        "unit": "g",
-        "macros_per_portion": {
-          "protein": 0,
-          "carbs": 12,
-          "fat": 0,
-          "calories": 49
-        },
-        "benefits": ["Antioxidantes", "Enzimas naturales", "Antimicrobiano"],
-        "seasonal": false,
-        "mediterranean_origin": "Universal"
-      },
-      "aceite_oliva_virgen": {
-        "id": "aceite_oliva_virgen",
-        "name": "Aceite de Oliva Virgen Extra",
-        "category": "otros_naturales",
-        "portion_size": 10,
-        "unit": "ml",
-        "macros_per_portion": {
-          "protein": 0,
-          "carbs": 0,
-          "fat": 10,
-          "calories": 90
-        },
-        "benefits": ["Grasas monoinsaturadas", "Vitamina E", "Antioxidantes"],
-        "seasonal": false,
-        "mediterranean_origin": "España, Italia, Grecia"
       }
     }
   },
-  "combinaciones_mediterraneas": {
-    "desayuno": [
-      {
-        "name": "Yogur con Miel y Nueces",
-        "items": ["yogur_griego", "miel_cruda", "nueces"],
-        "timing": "mañana"
-      },
-      {
-        "name": "Queso con Higos y Almendras",
-        "items": ["queso_manchego", "higos_frescos", "almendras_crudas"],
-        "timing": "mañana"
-      }
-    ],
-    "media_manana": [
-      {
-        "name": "Frutos Secos Mixtos",
-        "items": ["almendras_crudas", "nueces", "pasas"],
-        "timing": "media_mañana"
-      },
-      {
-        "name": "Fruta con Queso",
-        "items": ["manzana_verde", "queso_feta"],
-        "timing": "media_mañana"
-      }
-    ],
-    "media_tarde": [
-      {
-        "name": "Aceitunas y Queso",
-        "items": ["aceitunas_kalamata", "queso_manchego"],
-        "timing": "media_tarde"
-      },
-      {
-        "name": "Dátiles con Almendras",
-        "items": ["datiles", "almendras_crudas"],
-        "timing": "media_tarde"
-      }
-    ]
+  "exercise_calories_database": {
+    "fuerza": {
+      "intensidad_baja": 3.0,
+      "intensidad_media": 4.5,
+      "intensidad_alta": 6.0
+    },
+    "cardio": {
+      "caminar": 3.5,
+      "trotar": 7.0,
+      "correr": 10.0,
+      "bicicleta": 8.0,
+      "natacion": 9.0
+    },
+    "deportes": {
+      "futbol": 8.0,
+      "baloncesto": 7.5,
+      "tenis": 6.5,
+      "padel": 6.0
+    },
+    "hiit": {
+      "intensidad_moderada": 8.0,
+      "intensidad_alta": 12.0
+    }
   },
-  "shopping_lists": {},
-  "cooking_history": []
+  "cooking_schedules": {
+    "sesion_unica_domingo": {
+      "name": "Sesión única domingo",
+      "description": "Máxima eficiencia - Un día intenso",
+      "estimated_time": "4-6 horas",
+      "sessions": [
+        {
+          "day": "domingo",
+          "start_time": "10:00",
+          "duration": "4-6 horas",
+          "tasks": ["todas_las_recetas", "porcionar", "almacenar"]
+        }
+      ],
+      "pros": ["Máxima eficiencia", "Solo un día de cocina"],
+      "cons": ["Día muy intenso", "Comidas menos frescas al final"]
+    },
+    "dos_sesiones": {
+      "name": "Dos sesiones: Dom + Miér",
+      "description": "Balance entre eficiencia y frescura",
+      "estimated_time": "2-3 horas cada sesión",
+      "sessions": [
+        {
+          "day": "domingo",
+          "start_time": "10:00", 
+          "duration": "2-3 horas",
+          "tasks": ["proteinas", "legumbres", "bases"]
+        },
+        {
+          "day": "miercoles",
+          "start_time": "19:00",
+          "duration": "1-2 horas", 
+          "tasks": ["vegetales_frescos", "complementos", "ajustes"]
+        }
+      ],
+      "pros": ["Comidas más frescas", "Menos carga por sesión"],
+      "cons": ["Más planificación", "Dos días de cocina"]
+    },
+    "tres_sesiones": {
+      "name": "Tres sesiones: Dom/Mar/Vie",
+      "description": "Máxima frescura con meal prep",
+      "estimated_time": "1.5-2 horas cada sesión",
+      "sessions": [
+        {
+          "day": "domingo",
+          "start_time": "10:00",
+          "duration": "2 horas",
+          "tasks": ["proteinas_principales", "legumbres"]
+        },
+        {
+          "day": "martes", 
+          "start_time": "19:00",
+          "duration": "1.5 horas",
+          "tasks": ["bases_cereales", "vegetales"]
+        },
+        {
+          "day": "viernes",
+          "start_time": "19:00", 
+          "duration": "1 hora",
+          "tasks": ["ajustes_weekend", "preparacion_nueva_semana"]
+        }
+      ],
+      "pros": ["Máxima frescura", "Carga distribuida"],
+      "cons": ["Más tiempo semanal", "Requiere constancia"]
+    },
+    "preparacion_diaria": {
+      "name": "Preparación diaria",
+      "description": "Comida siempre fresca - Sin meal prep",
+      "estimated_time": "20-30 min/día",
+      "sessions": [
+        {
+          "day": "diario",
+          "start_time": "flexible",
+          "duration": "20-30 minutos",
+          "tasks": ["receta_del_dia", "complementos_frescos"]
+        }
+      ],
+      "pros": ["Comida siempre fresca", "Flexibilidad total"],
+      "cons": ["Tiempo diario requerido", "Más compras frecuentes"]
+    }
+  }
 }
