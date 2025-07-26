@@ -999,8 +999,295 @@ def process_profile_setup(telegram_id: str, message):
                 reply_markup=keyboard
             )
             
-        # Continuar con más pasos del perfil...
-        # (Se implementarán completamente todos los pasos)
+        elif step == "actividad":
+            actividad_map = {
+                "sedentario": 1.2,
+                "ligero": 1.375, 
+                "moderado": 1.55,
+                "intenso": 1.725
+            }
+            
+            actividad = actividad_map.get(message.text.lower())
+            if not actividad:
+                raise ValueError("Nivel de actividad no válido")
+            
+            data["activity_factor"] = actividad
+            meal_bot.user_states[telegram_id]["step"] = "ejercicio_tipo"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+            keyboard.add("Fuerza/Pesas", "Cardio")
+            keyboard.add("Deportes", "HIIT")
+            keyboard.add("Mixto", "Solo dieta")
+            
+            bot.send_message(
+                message.chat.id,
+                f"✅ Actividad registrada: {message.text}\n\n"
+                "🏋️ **Paso 7/10:** ¿Qué tipo de ejercicio haces principalmente?\n\n"
+                "**Fuerza/Pesas:** Entrenamiento con resistencias\n"
+                "**Cardio:** Running, ciclismo, natación\n"
+                "**Deportes:** Fútbol, tenis, baloncesto\n"
+                "**HIIT:** Entrenamientos de alta intensidad\n"
+                "**Mixto:** Combinación de varios tipos\n"
+                "**Solo dieta:** No hago ejercicio actualmente",
+                reply_markup=keyboard
+            )
+            
+        elif step == "ejercicio_tipo":
+            tipos_ejercicio = {
+                "fuerza/pesas": "fuerza",
+                "cardio": "cardio", 
+                "deportes": "deportes",
+                "hiit": "hiit",
+                "mixto": "mixto",
+                "solo dieta": "ninguno"
+            }
+            
+            tipo_ejercicio = tipos_ejercicio.get(message.text.lower())
+            if not tipo_ejercicio:
+                raise ValueError("Tipo de ejercicio no válido")
+            
+            data["ejercicio_tipo"] = tipo_ejercicio
+            meal_bot.user_states[telegram_id]["step"] = "frecuencia"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            if tipo_ejercicio == "ninguno":
+                # Saltar frecuencia si no hace ejercicio
+                data["frecuencia_semanal"] = 0
+                data["duracion_promedio"] = 0
+                meal_bot.user_states[telegram_id]["step"] = "preferencias"
+                meal_bot.user_states[telegram_id]["data"] = data
+                
+                keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+                keyboard.add("Continuar con preferencias")
+                
+                bot.send_message(
+                    message.chat.id,
+                    f"✅ Registrado: {message.text}\n\n"
+                    "⏭️ **Saltando al paso 9/10**\n\n"
+                    "🍽️ **Paso 9/10:** Configuremos tus preferencias alimentarias.\n"
+                    "Presiona el botón para continuar.",
+                    reply_markup=keyboard
+                )
+            else:
+                keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
+                keyboard.add("1-2 días", "3-4 días", "5-6 días")
+                keyboard.add("Todos los días")
+                
+                bot.send_message(
+                    message.chat.id,
+                    f"✅ Ejercicio registrado: {message.text}\n\n"
+                    "📅 **Paso 8/10:** ¿Cuántos días por semana entrenas?\n\n"
+                    "Incluye todos los tipos de ejercicio que realizas.",
+                    reply_markup=keyboard
+                )
+            
+        elif step == "frecuencia":
+            frecuencia_map = {
+                "1-2 días": 1.5,
+                "3-4 días": 3.5, 
+                "5-6 días": 5.5,
+                "todos los días": 7
+            }
+            
+            frecuencia = frecuencia_map.get(message.text.lower())
+            if not frecuencia:
+                raise ValueError("Frecuencia no válida")
+            
+            data["frecuencia_semanal"] = frecuencia
+            meal_bot.user_states[telegram_id]["step"] = "duracion"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+            keyboard.add("30-45 min", "45-60 min")
+            keyboard.add("60-90 min", "90+ min")
+            
+            bot.send_message(
+                message.chat.id,
+                f"✅ Frecuencia registrada: {message.text}\n\n"
+                "⏱️ **Paso 8B/10:** ¿Cuánto dura cada sesión de entrenamiento?\n\n"
+                "Tiempo promedio por sesión incluyendo calentamiento.",
+                reply_markup=keyboard
+            )
+            
+        elif step == "duracion":
+            duracion_map = {
+                "30-45 min": 37.5,
+                "45-60 min": 52.5,
+                "60-90 min": 75,
+                "90+ min": 105
+            }
+            
+            duracion = duracion_map.get(message.text.lower())
+            if not duracion:
+                raise ValueError("Duración no válida")
+            
+            data["duracion_promedio"] = duracion
+            meal_bot.user_states[telegram_id]["step"] = "preferencias"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+            keyboard.add("Configurar preferencias alimentarias")
+            
+            bot.send_message(
+                message.chat.id,
+                f"✅ Duración registrada: {message.text}\n\n"
+                "🍽️ **Paso 9/10:** Configuremos tus preferencias alimentarias.\n\n"
+                "Esto me ayudará a personalizar las recetas que genere para ti.",
+                reply_markup=keyboard
+            )
+            
+        elif step == "preferencias":
+            # Iniciar configuración de preferencias
+            meal_bot.user_states[telegram_id]["step"] = "gustos"
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+            keyboard.add("Sin preferencias específicas")
+            
+            bot.send_message(
+                message.chat.id,
+                "🍽️ **Paso 9A/10:** ¿Qué alimentos te gustan especialmente?\n\n"
+                "**Ejemplos:** pollo, salmón, quinoa, almendras, brócoli, aguacate\n\n"
+                "💡 **Escribe varios separados por comas**, o presiona el botón si no tienes preferencias específicas.",
+                reply_markup=keyboard
+            )
+            
+        elif step == "gustos":
+            if message.text.lower() == "sin preferencias específicas":
+                data["liked_foods"] = []
+            else:
+                # Procesar lista de alimentos
+                liked_foods = [food.strip() for food in message.text.split(',')]
+                data["liked_foods"] = liked_foods
+            
+            meal_bot.user_states[telegram_id]["step"] = "disgustos"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+            keyboard.add("Sin restricciones")
+            
+            bot.send_message(
+                message.chat.id,
+                f"✅ Preferencias registradas\n\n"
+                "🚫 **Paso 9B/10:** ¿Hay alimentos que NO quieres incluir?\n\n"
+                "**Ejemplos:** pescado, cilantro, lácteos, frutos secos\n\n"
+                "💡 **Escribe varios separados por comas**, o presiona el botón si no tienes restricciones.",
+                reply_markup=keyboard
+            )
+            
+        elif step == "disgustos":
+            if message.text.lower() == "sin restricciones":
+                data["disliked_foods"] = []
+            else:
+                disliked_foods = [food.strip() for food in message.text.split(',')]
+                data["disliked_foods"] = disliked_foods
+            
+            meal_bot.user_states[telegram_id]["step"] = "finalizar"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+            keyboard.add("✅ Crear mi perfil nutricional")
+            
+            bot.send_message(
+                message.chat.id,
+                f"✅ Restricciones registradas\n\n"
+                "🎯 **Paso 10/10:** ¡Todo listo para crear tu perfil!\n\n"
+                "📊 Calcularé tus macros personalizados basados en:\n"
+                "• Datos biométricos y objetivo\n"
+                "• Available Energy científico\n"
+                "• Distribución de ejercicio\n"
+                "• Preferencias alimentarias\n\n"
+                "🤖 El sistema generará recetas específicas para tu timing nutricional.\n\n"
+                "Presiona el botón para finalizar la configuración.",
+                reply_markup=keyboard
+            )
+            
+        elif step == "finalizar":
+            # Crear perfil completo usando UserProfileSystem
+            try:
+                # Preparar datos para el sistema de perfiles
+                exercise_data = []
+                if data.get("ejercicio_tipo", "ninguno") != "ninguno":
+                    exercise_data = [{
+                        "tipo": data["ejercicio_tipo"],
+                        "subtipo": "intensidad_media",  # Default
+                        "duracion": data["duracion_promedio"],
+                        "peso": data["peso"],
+                        "frecuencia_semanal": data["frecuencia_semanal"]
+                    }]
+                
+                profile_data = {
+                    "peso": data["peso"],
+                    "altura": data["altura"],
+                    "edad": data["edad"],
+                    "sexo": data["sexo"],
+                    "objetivo": data["objetivo"],
+                    "activity_factor": data["activity_factor"],
+                    "exercise_data": exercise_data,
+                    "preferences": {
+                        "liked_foods": data.get("liked_foods", []),
+                        "disliked_foods": data.get("disliked_foods", []),
+                        "cooking_methods": ["horno", "sarten", "plancha"]  # Default
+                    },
+                    "variety_level": 3,  # Default
+                    "cooking_schedule": "dos_sesiones",  # Default
+                    "max_prep_time": 60  # Default
+                }
+                
+                # Crear perfil usando el sistema científico
+                user_profile = meal_bot.profile_system.create_user_profile(telegram_id, profile_data)
+                
+                # Guardar en la base de datos
+                meal_bot.data["users"][telegram_id] = user_profile
+                meal_bot.save_data()
+                
+                # Limpiar estado de configuración
+                meal_bot.user_states[telegram_id] = {}
+                
+                # Mostrar resumen del perfil creado
+                success_message = f"""
+🎉 **¡PERFIL NUTRICIONAL CREADO EXITOSAMENTE!**
+
+👤 **TU PERFIL CIENTÍFICO:**
+• Objetivo: {user_profile['basic_data']['objetivo_descripcion']}
+• BMR: {user_profile['body_composition']['bmr']} kcal/día
+• Available Energy: {user_profile['energy_data']['available_energy']} kcal/kg FFM/día
+• Estado: {user_profile['energy_data']['ea_status']['color']} {user_profile['energy_data']['ea_status']['description']}
+
+🎯 **MACROS DIARIOS PERSONALIZADOS:**
+🔥 {user_profile['macros']['calories']} kcal totales
+🥩 {user_profile['macros']['protein_g']}g proteína
+🍞 {user_profile['macros']['carbs_g']}g carbohidratos  
+🥑 {user_profile['macros']['fat_g']}g grasas
+
+💡 **RECOMENDACIÓN CIENTÍFICA:**
+{user_profile['energy_data']['ea_status']['recommendation']}
+
+🚀 **¡YA PUEDES USAR EL SISTEMA V2.0!**
+
+**Comandos disponibles:**
+• `/mis_macros` - Ver tu perfil completo
+• `/menu` - Menú semanal con timing nutricional
+• `/buscar [consulta]` - Generar recetas con IA
+• `/generar` - Recetas específicas por timing
+• `/complementos` - Ver complementos mediterráneos
+
+¡Tu alimentación ahora está optimizada científicamente! 🧬
+"""
+                
+                meal_bot.send_long_message(
+                    message.chat.id,
+                    success_message,
+                    parse_mode='Markdown',
+                    reply_markup=meal_bot.create_main_menu_keyboard()
+                )
+                
+            except Exception as e:
+                bot.send_message(
+                    message.chat.id,
+                    f"❌ Error creando el perfil: {str(e)}\n\n"
+                    "Por favor, intenta de nuevo con /perfil"
+                )
         
     except ValueError as e:
         bot.send_message(
