@@ -1083,16 +1083,48 @@ def process_profile_setup(telegram_id: str, message):
                 )
             
         elif step == "frecuencia":
-            frecuencia_map = {
-                "1-2 días": 1.5,
-                "3-4 días": 3.5, 
-                "5-6 días": 5.5,
-                "todos los días": 7
-            }
+            # Procesamiento flexible de frecuencia
+            text = message.text.lower().strip()
             
-            frecuencia = frecuencia_map.get(message.text.lower())
+            # Mapear variaciones de texto a frecuencia numérica
+            if any(keyword in text for keyword in ["1", "2", "1-2", "uno", "dos"]):
+                frecuencia = 1.5
+            elif any(keyword in text for keyword in ["3", "4", "3-4", "tres", "cuatro"]):
+                frecuencia = 3.5
+            elif any(keyword in text for keyword in ["5", "6", "5-6", "cinco", "seis"]):
+                frecuencia = 5.5
+            elif any(keyword in text for keyword in ["7", "todos", "diario", "diaria"]):
+                frecuencia = 7
+            else:
+                # Intentar extraer número específico
+                import re
+                numbers = re.findall(r'\d+', text)
+                if numbers:
+                    num_days = int(numbers[0])
+                    if 1 <= num_days <= 2:
+                        frecuencia = 1.5
+                    elif 3 <= num_days <= 4:
+                        frecuencia = 3.5
+                    elif 5 <= num_days <= 6:
+                        frecuencia = 5.5
+                    elif num_days >= 7:
+                        frecuencia = 7
+                    else:
+                        frecuencia = None
+                else:
+                    frecuencia = None
+            
             if not frecuencia:
-                raise ValueError("Frecuencia no válida")
+                bot.send_message(
+                    message.chat.id,
+                    "❌ **No pude entender la frecuencia.**\n\n"
+                    "Por favor, usa los botones del teclado o escribe:\n"
+                    "• **1-2 días** por semana\n"
+                    "• **3-4 días** por semana\n" 
+                    "• **5-6 días** por semana\n"
+                    "• **Todos los días**"
+                )
+                return
             
             data["frecuencia_semanal"] = frecuencia
             meal_bot.user_states[telegram_id]["step"] = "duracion"
@@ -1111,16 +1143,43 @@ def process_profile_setup(telegram_id: str, message):
             )
             
         elif step == "duracion":
-            duracion_map = {
-                "30-45 min": 37.5,
-                "45-60 min": 52.5,
-                "60-90 min": 75,
-                "90+ min": 105
-            }
+            # Procesamiento flexible de duración
+            text = message.text.lower().strip()
             
-            duracion = duracion_map.get(message.text.lower())
-            if not duracion:
-                raise ValueError("Duración no válida")
+            # Extraer números del texto
+            import re
+            numbers = re.findall(r'\d+', text)
+            
+            if numbers:
+                # Usar el primer número encontrado como referencia
+                duration_num = int(numbers[0])
+                
+                if duration_num <= 30:
+                    duracion = 30
+                elif duration_num <= 45:
+                    duracion = 37.5
+                elif duration_num <= 60:
+                    duracion = 52.5
+                elif duration_num <= 90:
+                    duracion = 75
+                else:
+                    duracion = 105
+            elif any(keyword in text for keyword in ["30", "45", "corta", "rapida"]):
+                duracion = 37.5
+            elif any(keyword in text for keyword in ["60", "hora", "normal"]):
+                duracion = 52.5
+            elif any(keyword in text for keyword in ["90", "larga", "intensa"]):
+                duracion = 75
+            else:
+                bot.send_message(
+                    message.chat.id,
+                    "❌ **No pude entender la duración.**\n\n"
+                    "Por favor, usa los botones del teclado o escribe un tiempo como:\n"
+                    "• **30-45 minutos**\n"
+                    "• **60 minutos**\n"
+                    "• **90 minutos**"
+                )
+                return
             
             data["duracion_promedio"] = duracion
             meal_bot.user_states[telegram_id]["step"] = "preferencias"
