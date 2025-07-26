@@ -1078,7 +1078,7 @@ def process_profile_setup(telegram_id: str, message):
                     message.chat.id,
                     f"✅ Ejercicio registrado: {message.text}\n\n"
                     "📅 **Paso 8/10:** ¿Cuántos días por semana entrenas?\n\n"
-                    "Incluye todos los tipos de ejercicio que realizas.",
+                    "Solo indica la frecuencia total de entrenamiento.",
                     reply_markup=keyboard
                 )
             
