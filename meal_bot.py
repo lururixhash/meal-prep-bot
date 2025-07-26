@@ -1188,58 +1188,227 @@ def process_profile_setup(telegram_id: str, message):
             keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
             keyboard.add("Configurar preferencias alimentarias")
             
+            # Ir directamente a preferencias con opciones estructuradas
+            meal_bot.user_states[telegram_id]["step"] = "gustos_proteinas"
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
+            keyboard.add("🍗 Pollo", "🥩 Ternera", "🐟 Pescado")
+            keyboard.add("🥚 Huevos", "🫘 Legumbres", "🧀 Lácteos") 
+            keyboard.add("🌰 Frutos secos", "✅ Todas", "⏭️ Ninguna especial")
+            
             bot.send_message(
                 message.chat.id,
                 f"✅ Duración registrada: {message.text}\n\n"
-                "🍽️ **Paso 9/10:** Configuremos tus preferencias alimentarias.\n\n"
-                "Esto me ayudará a personalizar las recetas que genere para ti.",
+                "🍽️ **Paso 9A/10:** ¿Qué PROTEÍNAS prefieres?\n\n"
+                "Selecciona las que más te gusten o usa los botones:",
                 reply_markup=keyboard
             )
             
-        elif step == "preferencias":
-            # Iniciar configuración de preferencias
-            meal_bot.user_states[telegram_id]["step"] = "gustos"
+        elif step == "gustos_proteinas":
+            # Procesar selección de proteínas
+            if message.text == "⏭️ Ninguna especial":
+                data["liked_proteins"] = []
+            elif message.text == "✅ Todas":
+                data["liked_proteins"] = ["pollo", "ternera", "pescado", "huevos", "legumbres", "lacteos", "frutos_secos"]
+            else:
+                # Mapear emojis a nombres
+                protein_map = {
+                    "🍗 Pollo": "pollo", "🥩 Ternera": "ternera", "🐟 Pescado": "pescado",
+                    "🥚 Huevos": "huevos", "🫘 Legumbres": "legumbres", "🧀 Lácteos": "lacteos",
+                    "🌰 Frutos secos": "frutos_secos"
+                }
+                selected = protein_map.get(message.text, message.text.lower())
+                data["liked_proteins"] = [selected] if selected else []
             
-            keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
-            keyboard.add("Sin preferencias específicas")
+            meal_bot.user_states[telegram_id]["step"] = "gustos_carbos"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
+            keyboard.add("🍚 Arroz", "🌾 Quinoa", "🍞 Avena")
+            keyboard.add("🥔 Patatas", "🍝 Pasta", "🫓 Pan integral")
+            keyboard.add("🍌 Frutas", "✅ Todas", "⏭️ Ninguna especial")
             
             bot.send_message(
                 message.chat.id,
-                "🍽️ **Paso 9A/10:** ¿Qué alimentos te gustan especialmente?\n\n"
-                "**Ejemplos:** pollo, salmón, quinoa, almendras, brócoli, aguacate\n\n"
-                "💡 **Escribe varios separados por comas**, o presiona el botón si no tienes preferencias específicas.",
+                "✅ Proteínas registradas\n\n"
+                "🍽️ **Paso 9B/10:** ¿Qué CARBOHIDRATOS prefieres?\n\n"
+                "Selecciona tus favoritos:",
                 reply_markup=keyboard
             )
             
-        elif step == "gustos":
-            if message.text.lower() == "sin preferencias específicas":
-                data["liked_foods"] = []
+        elif step == "gustos_carbos":
+            # Procesar carbohidratos
+            if message.text == "⏭️ Ninguna especial":
+                data["liked_carbs"] = []
+            elif message.text == "✅ Todas":
+                data["liked_carbs"] = ["arroz", "quinoa", "avena", "patatas", "pasta", "pan_integral", "frutas"]
             else:
-                # Procesar lista de alimentos
-                liked_foods = [food.strip() for food in message.text.split(',')]
-                data["liked_foods"] = liked_foods
+                carb_map = {
+                    "🍚 Arroz": "arroz", "🌾 Quinoa": "quinoa", "🍞 Avena": "avena",
+                    "🥔 Patatas": "patatas", "🍝 Pasta": "pasta", "🫓 Pan integral": "pan_integral", 
+                    "🍌 Frutas": "frutas"
+                }
+                selected = carb_map.get(message.text, message.text.lower())
+                data["liked_carbs"] = [selected] if selected else []
+            
+            meal_bot.user_states[telegram_id]["step"] = "gustos_verduras"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
+            keyboard.add("🥬 Hojas verdes", "🥦 Crucíferas", "🍅 Solanáceas")
+            keyboard.add("🧄 Aromáticas", "🥕 Raíces", "🫑 Pimientos")
+            keyboard.add("🥒 Pepináceas", "✅ Todas", "⏭️ Ninguna especial")
+            
+            bot.send_message(
+                message.chat.id,
+                "✅ Carbohidratos registrados\n\n"
+                "🍽️ **Paso 9C/10:** ¿Qué VERDURAS prefieres?\n\n"
+                "Familias de vegetales que más te gusten:",
+                reply_markup=keyboard
+            )
+            
+        elif step == "gustos_verduras":
+            # Procesar verduras
+            if message.text == "⏭️ Ninguna especial":
+                data["liked_vegetables"] = []
+            elif message.text == "✅ Todas":
+                data["liked_vegetables"] = ["hojas_verdes", "cruciferas", "solanaceas", "aromaticas", "raices", "pimientos", "pepinaceas"]
+            else:
+                veg_map = {
+                    "🥬 Hojas verdes": "hojas_verdes", "🥦 Crucíferas": "cruciferas", "🍅 Solanáceas": "solanaceas",
+                    "🧄 Aromáticas": "aromaticas", "🥕 Raíces": "raices", "🫑 Pimientos": "pimientos",
+                    "🥒 Pepináceas": "pepinaceas"
+                }
+                selected = veg_map.get(message.text, message.text.lower())
+                data["liked_vegetables"] = [selected] if selected else []
             
             meal_bot.user_states[telegram_id]["step"] = "disgustos"
             meal_bot.user_states[telegram_id]["data"] = data
             
-            keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
-            keyboard.add("Sin restricciones")
+            keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
+            keyboard.add("🐟 Pescado", "🥛 Lácteos", "🌶️ Picante")
+            keyboard.add("🧄 Ajo/Cebolla", "🥜 Frutos secos", "🍄 Hongos")
+            keyboard.add("🌿 Cilantro", "⏭️ Sin restricciones", "📝 Otros")
             
             bot.send_message(
                 message.chat.id,
-                f"✅ Preferencias registradas\n\n"
-                "🚫 **Paso 9B/10:** ¿Hay alimentos que NO quieres incluir?\n\n"
-                "**Ejemplos:** pescado, cilantro, lácteos, frutos secos\n\n"
-                "💡 **Escribe varios separados por comas**, o presiona el botón si no tienes restricciones.",
+                "✅ Verduras registradas\n\n"
+                "🚫 **Paso 9D/10:** ¿Qué alimentos prefieres EVITAR?\n\n"
+                "Selecciona los que no quieres en tus recetas:",
                 reply_markup=keyboard
             )
             
+            
         elif step == "disgustos":
-            if message.text.lower() == "sin restricciones":
+            # Procesar alimentos a evitar
+            if message.text == "⏭️ Sin restricciones":
                 data["disliked_foods"] = []
+            elif message.text == "📝 Otros":
+                # Permitir texto libre para casos específicos
+                meal_bot.user_states[telegram_id]["step"] = "disgustos_texto"
+                bot.send_message(
+                    message.chat.id,
+                    "📝 **Escribe otros alimentos que prefieres evitar:**\n\n"
+                    "Ejemplos: mariscos, gluten, soja, cítricos\n\n"
+                    "Sepáralos por comas o escribe 'ninguno':"
+                )
+                return
             else:
-                disliked_foods = [food.strip() for food in message.text.split(',')]
-                data["disliked_foods"] = disliked_foods
+                dislike_map = {
+                    "🐟 Pescado": "pescado", "🥛 Lácteos": "lacteos", "🌶️ Picante": "picante",
+                    "🧄 Ajo/Cebolla": "ajo_cebolla", "🥜 Frutos secos": "frutos_secos", "🍄 Hongos": "hongos",
+                    "🌿 Cilantro": "cilantro"
+                }
+                selected = dislike_map.get(message.text, message.text.lower())
+                data["disliked_foods"] = [selected] if selected else []
+            
+            meal_bot.user_states[telegram_id]["step"] = "restricciones"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+            keyboard.add("🚫 Alergias", "🌱 Vegano")
+            keyboard.add("🥛 Sin lactosa", "🌾 Sin gluten")
+            keyboard.add("🕌 Halal", "✡️ Kosher")
+            keyboard.add("⏭️ Sin restricciones especiales")
+            
+            bot.send_message(
+                message.chat.id,
+                "✅ Alimentos a evitar registrados\n\n"
+                "⚠️ **Paso 9E/10:** ¿Tienes alguna RESTRICCIÓN ESPECIAL?\n\n"
+                "Selecciona si aplica alguna:",
+                reply_markup=keyboard
+            )
+            
+        elif step == "disgustos_texto":
+            # Procesar disgustos por texto libre
+            if message.text.lower() in ["ninguno", "sin restricciones", "no"]:
+                additional_dislikes = []
+            else:
+                additional_dislikes = [food.strip() for food in message.text.split(',')]
+            
+            # Combinar con restricciones anteriores
+            current_dislikes = data.get("disliked_foods", [])
+            data["disliked_foods"] = current_dislikes + additional_dislikes
+            
+            meal_bot.user_states[telegram_id]["step"] = "restricciones"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+            keyboard.add("🚫 Alergias", "🌱 Vegano")
+            keyboard.add("🥛 Sin lactosa", "🌾 Sin gluten")
+            keyboard.add("🕌 Halal", "✡️ Kosher")
+            keyboard.add("⏭️ Sin restricciones especiales")
+            
+            bot.send_message(
+                message.chat.id,
+                "✅ Alimentos adicionales registrados\n\n"
+                "⚠️ **Paso 9E/10:** ¿Tienes alguna RESTRICCIÓN ESPECIAL?\n\n"
+                "Selecciona si aplica alguna:",
+                reply_markup=keyboard
+            )
+            
+        elif step == "restricciones":
+            # Procesar restricciones especiales
+            if message.text == "⏭️ Sin restricciones especiales":
+                data["special_restrictions"] = []
+            else:
+                restriction_map = {
+                    "🚫 Alergias": "alergias", "🌱 Vegano": "vegano",
+                    "🥛 Sin lactosa": "sin_lactosa", "🌾 Sin gluten": "sin_gluten", 
+                    "🕌 Halal": "halal", "✡️ Kosher": "kosher"
+                }
+                selected = restriction_map.get(message.text, message.text.lower())
+                data["special_restrictions"] = [selected] if selected else []
+            
+            meal_bot.user_states[telegram_id]["step"] = "metodos_coccion"
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
+            keyboard.add("🔥 Horno", "🍳 Sartén", "🍲 Plancha")
+            keyboard.add("🥘 Guisos", "🍜 Vapor", "🥗 Crudo")
+            keyboard.add("✅ Todos", "⏭️ Sin preferencias")
+            
+            bot.send_message(
+                message.chat.id,
+                "✅ Restricciones registradas\n\n"
+                "👨‍🍳 **Paso 9F/10:** ¿Qué MÉTODOS DE COCCIÓN prefieres?\n\n"
+                "Selecciona tus favoritos:",
+                reply_markup=keyboard
+            )
+            
+        elif step == "metodos_coccion":
+            # Procesar métodos de cocción
+            if message.text == "⏭️ Sin preferencias":
+                data["cooking_methods"] = ["horno", "sarten", "plancha"]  # Default
+            elif message.text == "✅ Todos":
+                data["cooking_methods"] = ["horno", "sarten", "plancha", "guisos", "vapor", "crudo"]
+            else:
+                method_map = {
+                    "🔥 Horno": "horno", "🍳 Sartén": "sarten", "🍲 Plancha": "plancha",
+                    "🥘 Guisos": "guisos", "🍜 Vapor": "vapor", "🥗 Crudo": "crudo"
+                }
+                selected = method_map.get(message.text, message.text.lower())
+                data["cooking_methods"] = [selected] if selected else ["horno", "sarten", "plancha"]
             
             meal_bot.user_states[telegram_id]["step"] = "finalizar"
             meal_bot.user_states[telegram_id]["data"] = data
@@ -1249,15 +1418,16 @@ def process_profile_setup(telegram_id: str, message):
             
             bot.send_message(
                 message.chat.id,
-                f"✅ Restricciones registradas\n\n"
-                "🎯 **Paso 10/10:** ¡Todo listo para crear tu perfil!\n\n"
-                "📊 Calcularé tus macros personalizados basados en:\n"
+                "✅ Métodos de cocción registrados\n\n"
+                "🎯 **Paso 10/10:** ¡Todo listo para crear tu perfil científico!\n\n"
+                "📊 **Tu configuración incluye:**\n"
                 "• Datos biométricos y objetivo\n"
                 "• Available Energy científico\n"
-                "• Distribución de ejercicio\n"
-                "• Preferencias alimentarias\n\n"
-                "🤖 El sistema generará recetas específicas para tu timing nutricional.\n\n"
-                "Presiona el botón para finalizar la configuración.",
+                "• Distribución de ejercicio detallada\n"
+                "• Preferencias alimentarias completas\n"
+                "• Restricciones y métodos de cocción\n\n"
+                "🤖 **El sistema generará recetas personalizadas con IA**\n\n"
+                "Presiona el botón para finalizar:",
                 reply_markup=keyboard
             )
             
@@ -1275,6 +1445,14 @@ def process_profile_setup(telegram_id: str, message):
                         "frecuencia_semanal": data["frecuencia_semanal"]
                     }]
                 
+                # Combinar todas las preferencias alimentarias
+                all_liked_foods = (
+                    data.get("liked_proteins", []) + 
+                    data.get("liked_carbs", []) + 
+                    data.get("liked_vegetables", []) +
+                    data.get("liked_foods", [])  # Fallback para compatibilidad
+                )
+                
                 profile_data = {
                     "peso": data["peso"],
                     "altura": data["altura"],
@@ -1284,9 +1462,13 @@ def process_profile_setup(telegram_id: str, message):
                     "activity_factor": data["activity_factor"],
                     "exercise_data": exercise_data,
                     "preferences": {
-                        "liked_foods": data.get("liked_foods", []),
+                        "liked_foods": all_liked_foods,
+                        "liked_proteins": data.get("liked_proteins", []),
+                        "liked_carbs": data.get("liked_carbs", []),
+                        "liked_vegetables": data.get("liked_vegetables", []),
                         "disliked_foods": data.get("disliked_foods", []),
-                        "cooking_methods": ["horno", "sarten", "plancha"]  # Default
+                        "special_restrictions": data.get("special_restrictions", []),
+                        "cooking_methods": data.get("cooking_methods", ["horno", "sarten", "plancha"])
                     },
                     "variety_level": 3,  # Default
                     "cooking_schedule": "dos_sesiones",  # Default
