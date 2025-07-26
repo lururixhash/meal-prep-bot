@@ -1182,13 +1182,9 @@ def process_profile_setup(telegram_id: str, message):
                 return
             
             data["duracion_promedio"] = duracion
-            meal_bot.user_states[telegram_id]["step"] = "preferencias"
             meal_bot.user_states[telegram_id]["data"] = data
             
-            keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
-            keyboard.add("Configurar preferencias alimentarias")
-            
-            # Ir directamente a preferencias con opciones estructuradas
+            # Ir directamente a preferencias de proteínas
             meal_bot.user_states[telegram_id]["step"] = "gustos_proteinas"
             
             keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
@@ -1200,25 +1196,55 @@ def process_profile_setup(telegram_id: str, message):
                 message.chat.id,
                 f"✅ Duración registrada: {message.text}\n\n"
                 "🍽️ **Paso 9A/10:** ¿Qué PROTEÍNAS prefieres?\n\n"
-                "Selecciona las que más te gusten o usa los botones:",
+                "**Opciones disponibles:**\n"
+                "• 🍗 Pollo\n"
+                "• 🥩 Ternera  \n"
+                "• 🐟 Pescado\n"
+                "• 🥚 Huevos\n"
+                "• 🫘 Legumbres\n"
+                "• 🧀 Lácteos\n"
+                "• 🌰 Frutos secos\n"
+                "• ✅ Todas\n"
+                "• ⏭️ Ninguna especial\n\n"
+                "Puedes usar los botones o escribir el nombre directamente:",
                 reply_markup=keyboard
             )
             
         elif step == "gustos_proteinas":
-            # Procesar selección de proteínas
-            if message.text == "⏭️ Ninguna especial":
+            # Procesar selección de proteínas con manejo flexible
+            text = message.text.lower().strip()
+            
+            if "ninguna" in text or text == "⏭️ ninguna especial":
                 data["liked_proteins"] = []
-            elif message.text == "✅ Todas":
+            elif "todas" in text or text == "✅ todas":
                 data["liked_proteins"] = ["pollo", "ternera", "pescado", "huevos", "legumbres", "lacteos", "frutos_secos"]
             else:
-                # Mapear emojis a nombres
+                # Mapear tanto emojis como texto
                 protein_map = {
-                    "🍗 Pollo": "pollo", "🥩 Ternera": "ternera", "🐟 Pescado": "pescado",
-                    "🥚 Huevos": "huevos", "🫘 Legumbres": "legumbres", "🧀 Lácteos": "lacteos",
-                    "🌰 Frutos secos": "frutos_secos"
+                    "🍗 pollo": "pollo", "pollo": "pollo",
+                    "🥩 ternera": "ternera", "ternera": "ternera", "carne": "ternera",
+                    "🐟 pescado": "pescado", "pescado": "pescado", "pez": "pescado",
+                    "🥚 huevos": "huevos", "huevos": "huevos", "huevo": "huevos",
+                    "🫘 legumbres": "legumbres", "legumbres": "legumbres", "lentejas": "legumbres",
+                    "🧀 lácteos": "lacteos", "lacteos": "lacteos", "queso": "lacteos", "yogur": "lacteos",
+                    "🌰 frutos secos": "frutos_secos", "frutos secos": "frutos_secos", "nueces": "frutos_secos"
                 }
-                selected = protein_map.get(message.text, message.text.lower())
-                data["liked_proteins"] = [selected] if selected else []
+                
+                selected = None
+                for key, value in protein_map.items():
+                    if key in text or text in key:
+                        selected = value
+                        break
+                
+                if selected:
+                    data["liked_proteins"] = [selected]
+                else:
+                    # Si no reconoce la entrada, pedir clarificación
+                    bot.send_message(
+                        message.chat.id,
+                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: pollo, ternera, pescado, huevos, legumbres, lacteos, frutos secos, todas, o ninguna."
+                    )
+                    return
             
             meal_bot.user_states[telegram_id]["step"] = "gustos_carbos"
             meal_bot.user_states[telegram_id]["data"] = data
