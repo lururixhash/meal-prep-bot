@@ -145,12 +145,13 @@ class UserProfileSystem:
         exercise_data = profile_data.get("exercise_data", [])
         daily_exercise_calories = self.calculate_exercise_calories(exercise_data)
         
-        # Ajuste calórico según objetivo
+        # Ajuste calórico según objetivo (basado en evidencia científica)
         caloric_adjustments = {
-            "bajar_peso": -0.15,
-            "subir_masa": 0.15,
-            "recomposicion": 0.0,
-            "mantener": 0.0
+            "bajar_peso": -0.15,           # -15% para pérdida de grasa
+            "subir_masa": 0.10,            # +10% para ganancia equilibrada (200-300 kcal superávit)
+            "subir_masa_lean": 0.08,       # +8% para ganancia ultra-limpia (150-250 kcal superávit)
+            "recomposicion": 0.0,          # Mantenimiento para recomposición
+            "mantener": 0.0                # Mantenimiento estricto
         }
         
         adjustment = caloric_adjustments.get(objetivo, 0.0)
@@ -160,12 +161,13 @@ class UserProfileSystem:
         available_energy = self.calculate_available_energy(target_calories, daily_exercise_calories, lean_mass)
         ea_status = self.get_ea_status(available_energy)
         
-        # Distribución de macronutrientes
+        # Distribución de macronutrientes optimizada por objetivo
         macro_distributions = {
-            "bajar_peso": {"protein": 0.35, "carbs": 0.40, "fat": 0.25},
-            "subir_masa": {"protein": 0.30, "carbs": 0.45, "fat": 0.25},
-            "recomposicion": {"protein": 0.35, "carbs": 0.40, "fat": 0.25},
-            "mantener": {"protein": 0.30, "carbs": 0.40, "fat": 0.30}
+            "bajar_peso": {"protein": 0.35, "carbs": 0.40, "fat": 0.25},        # Alta proteína para preservar músculo
+            "subir_masa": {"protein": 0.30, "carbs": 0.45, "fat": 0.25},        # Carbos para rendimiento, proteína para síntesis
+            "subir_masa_lean": {"protein": 0.32, "carbs": 0.43, "fat": 0.25},   # Más proteína para ganancia ultra-limpia
+            "recomposicion": {"protein": 0.35, "carbs": 0.40, "fat": 0.25},     # Alta proteína para recomposición
+            "mantener": {"protein": 0.30, "carbs": 0.40, "fat": 0.30}           # Distribución equilibrada
         }
         
         distribution = macro_distributions.get(objetivo, macro_distributions["mantener"])
@@ -225,7 +227,8 @@ class UserProfileSystem:
         """Obtener descripción user-friendly del objetivo"""
         descriptions = {
             "bajar_peso": "Perder grasa manteniendo músculo",
-            "subir_masa": "Ganar músculo minimizando grasa", 
+            "subir_masa": "Ganar músculo con superávit controlado (200-300 kcal)", 
+            "subir_masa_lean": "Ganancia muscular ultra-limpia (150-250 kcal superávit)",
             "recomposicion": "Bajar grasa y ganar músculo simultáneamente",
             "mantener": "Mantener peso y composición corporal"
         }
@@ -236,6 +239,7 @@ class UserProfileSystem:
         timing_recommendations = {
             "bajar_peso": ["post_entreno", "comida_principal"],
             "subir_masa": ["pre_entreno", "post_entreno", "comida_principal"],
+            "subir_masa_lean": ["post_entreno", "comida_principal", "snack_complemento"],  # Timing más controlado
             "recomposicion": ["post_entreno", "comida_principal", "snack_complemento"],
             "mantener": ["comida_principal", "snack_complemento"]
         }
@@ -265,13 +269,13 @@ class UserProfileSystem:
 if __name__ == "__main__":
     profile_system = UserProfileSystem("recipes_new.json")
     
-    # Ejemplo de perfil de usuario
+    # Ejemplo de perfil de usuario (datos del informe)
     sample_profile_data = {
         "peso": 70.0,
         "altura": 176.0,
-        "edad": 25,
+        "edad": 26,  # Actualizado según informe
         "sexo": "masculino",
-        "objetivo": "subir_masa",
+        "objetivo": "subir_masa",  # Ahora con +10% en lugar de +15%
         "activity_factor": 1.55,
         "exercise_data": [
             {
@@ -303,7 +307,16 @@ if __name__ == "__main__":
     user_profile = profile_system.create_user_profile("12345", sample_profile_data)
     
     print("=== PERFIL DE USUARIO CREADO ===")
+    print(f"Objetivo: {user_profile['basic_data']['objetivo_descripcion']}")
     print(f"Available Energy: {user_profile['energy_data']['available_energy']} kcal/kg FFM/día")
     print(f"Estado EA: {user_profile['energy_data']['ea_status']['description']}")
-    print(f"Calorías objetivo: {user_profile['macros']['calories']}")
+    print(f"Calorías objetivo: {user_profile['macros']['calories']} kcal")
     print(f"Macros: {user_profile['macros']['protein_g']}P / {user_profile['macros']['carbs_g']}C / {user_profile['macros']['fat_g']}F")
+    
+    # Comparar con subir_masa_lean
+    print("\n=== COMPARACIÓN CON SUBIR_MASA_LEAN ===")
+    sample_profile_data["objetivo"] = "subir_masa_lean"
+    user_profile_lean = profile_system.create_user_profile("12345", sample_profile_data)
+    print(f"Objetivo: {user_profile_lean['basic_data']['objetivo_descripcion']}")
+    print(f"Calorías objetivo: {user_profile_lean['macros']['calories']} kcal")
+    print(f"Macros: {user_profile_lean['macros']['protein_g']}P / {user_profile_lean['macros']['carbs_g']}C / {user_profile_lean['macros']['fat_g']}F")

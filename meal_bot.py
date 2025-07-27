@@ -953,14 +953,16 @@ def process_profile_setup(telegram_id: str, message):
             
             keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
             keyboard.add("Bajar peso", "Ganar músculo")
-            keyboard.add("Recomposición", "Mantener")
+            keyboard.add("Ganancia limpia", "Recomposición")
+            keyboard.add("Mantener")
             
             bot.send_message(
                 message.chat.id,
                 f"✅ Sexo registrado: {sexo}\n\n"
                 "🎯 **Paso 5/10:** ¿Cuál es tu objetivo principal?\n\n"
                 "**Bajar peso:** Perder grasa manteniendo músculo\n"
-                "**Ganar músculo:** Subir masa minimizando grasa\n"
+                "**Ganar músculo:** Superávit controlado (200-300 kcal)\n"
+                "**Ganancia limpia:** Ultra-limpia (150-250 kcal superávit)\n"
                 "**Recomposición:** Bajar grasa y ganar músculo simultáneamente\n"
                 "**Mantener:** Mantener peso y composición actual",
                 reply_markup=keyboard
@@ -971,6 +973,7 @@ def process_profile_setup(telegram_id: str, message):
                 "bajar peso": "bajar_peso",
                 "ganar músculo": "subir_masa", 
                 "ganar musculo": "subir_masa",
+                "ganancia limpia": "subir_masa_lean",
                 "recomposición": "recomposicion",
                 "recomposicion": "recomposicion",
                 "mantener": "mantener"
