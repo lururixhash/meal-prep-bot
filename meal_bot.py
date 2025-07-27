@@ -1666,10 +1666,18 @@ def process_profile_setup(telegram_id: str, message):
             )
             
         elif step == "gustos_verduras":
-            # Procesar verduras con manejo flexible
+            # Procesar selección múltiple de verduras
             text = message.text.lower().strip()
             
-            if "ninguna" in text or text == "⏭️ ninguna especial":
+            # Inicializar lista si no existe
+            if "liked_vegetables" not in data:
+                data["liked_vegetables"] = []
+            
+            # Verificar si quiere continuar
+            if "continuar" in text or text == "➡️ continuar":
+                # Continuar al siguiente paso
+                pass
+            elif "ninguna" in text or text == "⏭️ ninguna especial":
                 data["liked_vegetables"] = []
             elif "todas" in text or text == "✅ todas":
                 data["liked_vegetables"] = ["hojas_verdes", "cruciferas", "solanaceas", "aromaticas", "raices", "pimientos", "pepinaceas"]
@@ -1691,25 +1699,46 @@ def process_profile_setup(telegram_id: str, message):
                         break
                 
                 if selected:
-                    data["liked_vegetables"] = [selected]
+                    # Agregar a la lista si no está ya incluido
+                    if selected not in data["liked_vegetables"]:
+                        data["liked_vegetables"].append(selected)
+                        
+                    # Mostrar selección actual y continuar
+                    selected_names = [name.replace("_", " ").title() for name in data["liked_vegetables"]]
+                    selection_text = ", ".join(selected_names) if selected_names else "Ninguna"
+                    
+                    bot.send_message(
+                        message.chat.id,
+                        f"✅ **{selected.replace('_', ' ').title()}** añadido\n\n"
+                        f"**Seleccionados:** {selection_text}\n\n"
+                        "Puedes seleccionar más opciones o usar ➡️ **Continuar**"
+                    )
+                    return  # Mantener en el mismo paso
                 else:
                     bot.send_message(
                         message.chat.id,
-                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: hojas verdes, cruciferas, solanaceas, aromaticas, raices, pimientos, pepinaceas, todas, o ninguna."
+                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: hojas verdes, cruciferas, solanaceas, aromaticas, raices, pimientos, pepinaceas, todas, ninguna, o continuar."
                     )
                     return
             
             meal_bot.user_states[telegram_id]["step"] = "disgustos"
             meal_bot.user_states[telegram_id]["data"] = data
             
+            # Inicializar lista de alimentos a evitar
+            data["disliked_foods"] = []
+            
             keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
             keyboard.add("🐟 Pescado", "🥛 Lácteos", "🌶️ Picante")
             keyboard.add("🧄 Ajo/Cebolla", "🥜 Frutos secos", "🍄 Hongos")
             keyboard.add("🌿 Cilantro", "⏭️ Sin restricciones", "📝 Otros")
+            keyboard.add("➡️ Continuar")
+            
+            selected_veggies = [name.replace("_", " ").title() for name in data["liked_vegetables"]]
+            veggie_text = ", ".join(selected_veggies) if selected_veggies else "Ninguna"
             
             bot.send_message(
                 message.chat.id,
-                "✅ Verduras registradas\n\n"
+                f"✅ Verduras registradas: {veggie_text}\n\n"
                 "🚫 **Paso 9D/10:** ¿Qué alimentos prefieres EVITAR?\n\n"
                 "**Opciones disponibles:**\n"
                 "• 🐟 Pescado\n"
@@ -1721,16 +1750,25 @@ def process_profile_setup(telegram_id: str, message):
                 "• 🌿 Cilantro\n"
                 "• ⏭️ Sin restricciones\n"
                 "• 📝 Otros\n\n"
-                "Puedes usar los botones o escribir el nombre:",
+                "**PUEDES SELECCIONAR MÚLTIPLES OPCIONES**\n"
+                "Usa ➡️ **Continuar** cuando termines de seleccionar:",
                 reply_markup=keyboard
             )
             
             
         elif step == "disgustos":
-            # Procesar alimentos a evitar con manejo flexible
+            # Procesar selección múltiple de alimentos a evitar
             text = message.text.lower().strip()
             
-            if "sin restricciones" in text or "ninguna" in text:
+            # Inicializar lista si no existe
+            if "disliked_foods" not in data:
+                data["disliked_foods"] = []
+            
+            # Verificar si quiere continuar
+            if "continuar" in text or text == "➡️ continuar":
+                # Continuar al siguiente paso
+                pass
+            elif "sin restricciones" in text or "ninguna" in text:
                 data["disliked_foods"] = []
             elif "otros" in text or text == "📝 otros":
                 # Permitir texto libre para casos específicos
@@ -1760,26 +1798,47 @@ def process_profile_setup(telegram_id: str, message):
                         break
                 
                 if selected:
-                    data["disliked_foods"] = [selected]
+                    # Agregar a la lista si no está ya incluido
+                    if selected not in data["disliked_foods"]:
+                        data["disliked_foods"].append(selected)
+                        
+                    # Mostrar selección actual y continuar
+                    selected_names = [name.replace("_", " ").title() for name in data["disliked_foods"]]
+                    selection_text = ", ".join(selected_names) if selected_names else "Ninguna"
+                    
+                    bot.send_message(
+                        message.chat.id,
+                        f"✅ **{selected.replace('_', ' ').title()}** añadido a evitar\n\n"
+                        f"**A evitar:** {selection_text}\n\n"
+                        "Puedes seleccionar más opciones o usar ➡️ **Continuar**"
+                    )
+                    return  # Mantener en el mismo paso
                 else:
                     bot.send_message(
                         message.chat.id,
-                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: pescado, lacteos, picante, ajo, cebolla, frutos secos, hongos, cilantro, sin restricciones, u otros."
+                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: pescado, lacteos, picante, ajo, cebolla, frutos secos, hongos, cilantro, sin restricciones, otros, o continuar."
                     )
                     return
             
             meal_bot.user_states[telegram_id]["step"] = "restricciones"
             meal_bot.user_states[telegram_id]["data"] = data
             
+            # Inicializar lista de restricciones especiales
+            data["special_restrictions"] = []
+            
             keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
             keyboard.add("🚫 Alergias", "🌱 Vegano")
             keyboard.add("🥛 Sin lactosa", "🌾 Sin gluten")
             keyboard.add("🕌 Halal", "✡️ Kosher")
             keyboard.add("⏭️ Sin restricciones especiales")
+            keyboard.add("➡️ Continuar")
+            
+            selected_dislikes = [name.replace("_", " ").title() for name in data["disliked_foods"]]
+            dislike_text = ", ".join(selected_dislikes) if selected_dislikes else "Ninguna"
             
             bot.send_message(
                 message.chat.id,
-                "✅ Alimentos a evitar registrados\n\n"
+                f"✅ Alimentos a evitar registrados: {dislike_text}\n\n"
                 "⚠️ **Paso 9E/10:** ¿Tienes alguna RESTRICCIÓN ESPECIAL?\n\n"
                 "**Opciones disponibles:**\n"
                 "• 🚫 Alergias\n"
@@ -1789,7 +1848,8 @@ def process_profile_setup(telegram_id: str, message):
                 "• 🕌 Halal\n"
                 "• ✡️ Kosher\n"
                 "• ⏭️ Sin restricciones especiales\n\n"
-                "Puedes usar los botones o escribir el nombre:",
+                "**PUEDES SELECCIONAR MÚLTIPLES OPCIONES**\n"
+                "Usa ➡️ **Continuar** cuando termines de seleccionar:",
                 reply_markup=keyboard
             )
             
@@ -1830,10 +1890,18 @@ def process_profile_setup(telegram_id: str, message):
             )
             
         elif step == "restricciones":
-            # Procesar restricciones especiales con manejo flexible
+            # Procesar selección múltiple de restricciones especiales
             text = message.text.lower().strip()
             
-            if "sin restricciones" in text or "ninguna" in text:
+            # Inicializar lista si no existe
+            if "special_restrictions" not in data:
+                data["special_restrictions"] = []
+            
+            # Verificar si quiere continuar
+            if "continuar" in text or text == "➡️ continuar":
+                # Continuar al siguiente paso
+                pass
+            elif "sin restricciones" in text or "ninguna" in text:
                 data["special_restrictions"] = []
             else:
                 restriction_map = {
@@ -1852,25 +1920,46 @@ def process_profile_setup(telegram_id: str, message):
                         break
                 
                 if selected:
-                    data["special_restrictions"] = [selected]
+                    # Agregar a la lista si no está ya incluido
+                    if selected not in data["special_restrictions"]:
+                        data["special_restrictions"].append(selected)
+                        
+                    # Mostrar selección actual y continuar
+                    selected_names = [name.replace("_", " ").title() for name in data["special_restrictions"]]
+                    selection_text = ", ".join(selected_names) if selected_names else "Ninguna"
+                    
+                    bot.send_message(
+                        message.chat.id,
+                        f"✅ **{selected.replace('_', ' ').title()}** añadido\n\n"
+                        f"**Restricciones:** {selection_text}\n\n"
+                        "Puedes seleccionar más opciones o usar ➡️ **Continuar**"
+                    )
+                    return  # Mantener en el mismo paso
                 else:
                     bot.send_message(
                         message.chat.id,
-                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: alergias, vegano, sin lactosa, sin gluten, halal, kosher, o sin restricciones."
+                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: alergias, vegano, sin lactosa, sin gluten, halal, kosher, sin restricciones, o continuar."
                     )
                     return
             
             meal_bot.user_states[telegram_id]["step"] = "metodos_coccion"
             meal_bot.user_states[telegram_id]["data"] = data
             
+            # Inicializar lista de métodos de cocción
+            data["cooking_methods"] = []
+            
             keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
             keyboard.add("🔥 Horno", "🍳 Sartén", "🍲 Plancha")
             keyboard.add("🥘 Guisos", "🍜 Vapor", "🥗 Crudo")
             keyboard.add("✅ Todos", "⏭️ Sin preferencias")
+            keyboard.add("➡️ Continuar")
+            
+            selected_restrictions = [name.replace("_", " ").title() for name in data["special_restrictions"]]
+            restriction_text = ", ".join(selected_restrictions) if selected_restrictions else "Ninguna"
             
             bot.send_message(
                 message.chat.id,
-                "✅ Restricciones registradas\n\n"
+                f"✅ Restricciones registradas: {restriction_text}\n\n"
                 "👨‍🍳 **Paso 9F/10:** ¿Qué MÉTODOS DE COCCIÓN prefieres?\n\n"
                 "**Opciones disponibles:**\n"
                 "• 🔥 Horno\n"
@@ -1881,15 +1970,25 @@ def process_profile_setup(telegram_id: str, message):
                 "• 🥗 Crudo\n"
                 "• ✅ Todos\n"
                 "• ⏭️ Sin preferencias\n\n"
-                "Puedes usar los botones o escribir el nombre:",
+                "**PUEDES SELECCIONAR MÚLTIPLES OPCIONES**\n"
+                "Usa ➡️ **Continuar** cuando termines de seleccionar:",
                 reply_markup=keyboard
             )
             
         elif step == "metodos_coccion":
-            # Procesar métodos de cocción con manejo flexible
+            # Procesar selección múltiple de métodos de cocción
             text = message.text.lower().strip()
             
-            if "sin preferencias" in text or "ninguna" in text:
+            # Inicializar lista si no existe
+            if "cooking_methods" not in data:
+                data["cooking_methods"] = []
+            
+            # Verificar si quiere continuar
+            if "continuar" in text or text == "➡️ continuar":
+                # Si no ha seleccionado nada, usar valores por defecto
+                if not data["cooking_methods"]:
+                    data["cooking_methods"] = ["horno", "sarten", "plancha"]  # Default
+            elif "sin preferencias" in text or "ninguna" in text:
                 data["cooking_methods"] = ["horno", "sarten", "plancha"]  # Default
             elif "todos" in text or text == "✅ todos":
                 data["cooking_methods"] = ["horno", "sarten", "plancha", "guisos", "vapor", "crudo"]
@@ -1910,11 +2009,25 @@ def process_profile_setup(telegram_id: str, message):
                         break
                 
                 if selected:
-                    data["cooking_methods"] = [selected]
+                    # Agregar a la lista si no está ya incluido
+                    if selected not in data["cooking_methods"]:
+                        data["cooking_methods"].append(selected)
+                        
+                    # Mostrar selección actual y continuar
+                    selected_names = [name.replace("_", " ").title() for name in data["cooking_methods"]]
+                    selection_text = ", ".join(selected_names) if selected_names else "Ninguna"
+                    
+                    bot.send_message(
+                        message.chat.id,
+                        f"✅ **{selected.replace('_', ' ').title()}** añadido\n\n"
+                        f"**Métodos seleccionados:** {selection_text}\n\n"
+                        "Puedes seleccionar más opciones o usar ➡️ **Continuar**"
+                    )
+                    return  # Mantener en el mismo paso
                 else:
                     bot.send_message(
                         message.chat.id,
-                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: horno, sarten, plancha, guisos, vapor, crudo, todos, o sin preferencias."
+                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: horno, sarten, plancha, guisos, vapor, crudo, todos, sin preferencias, o continuar."
                     )
                     return
             
@@ -1924,9 +2037,12 @@ def process_profile_setup(telegram_id: str, message):
             keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
             keyboard.add("✅ Crear mi perfil nutricional")
             
+            selected_methods = [name.replace("_", " ").title() for name in data["cooking_methods"]]
+            methods_text = ", ".join(selected_methods) if selected_methods else "Por defecto"
+            
             bot.send_message(
                 message.chat.id,
-                "✅ Métodos de cocción registrados\n\n"
+                f"✅ Métodos de cocción registrados: {methods_text}\n\n"
                 "🎯 **Paso 10/10:** ¡Todo listo para crear tu perfil científico!\n\n"
                 "📊 **Tu configuración incluye:**\n"
                 "• Datos biométricos y objetivo\n"
