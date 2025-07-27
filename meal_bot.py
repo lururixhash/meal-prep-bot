@@ -1602,11 +1602,47 @@ def process_profile_setup(telegram_id: str, message):
                 "• Preferencias alimentarias completas\n"
                 "• Restricciones y métodos de cocción\n\n"
                 "🤖 **El sistema generará recetas personalizadas con IA**\n\n"
-                "Presiona el botón para finalizar:",
+                "**Para finalizar:**\n"
+                "• Usa el botón: ✅ Crear mi perfil nutricional\n"
+                "• O escribe: 'crear perfil' o 'finalizar'\n\n"
+                "¡Tu perfil científico estará listo en segundos!",
                 reply_markup=keyboard
             )
             
         elif step == "finalizar":
+            # Validar entrada flexible para crear perfil
+            text = message.text.lower().strip()
+            
+            # Aceptar múltiples variaciones
+            valid_inputs = [
+                "✅ crear mi perfil nutricional",
+                "crear mi perfil nutricional", 
+                "crear perfil",
+                "crear",
+                "finalizar",
+                "terminar",
+                "continuar",
+                "listo",
+                "si"
+            ]
+            
+            # Verificar si la entrada es válida
+            is_valid = False
+            for valid_input in valid_inputs:
+                if valid_input in text or text in valid_input:
+                    is_valid = True
+                    break
+            
+            if not is_valid:
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Para crear tu perfil, por favor:\n\n"
+                    "• Usa el botón: ✅ Crear mi perfil nutricional\n"
+                    "• O escribe: 'crear perfil', 'finalizar', 'listo'\n\n"
+                    "¡Estás a un paso de tener tu perfil científico!"
+                )
+                return
+            
             # Crear perfil completo usando UserProfileSystem
             try:
                 # Preparar datos para el sistema de perfiles
