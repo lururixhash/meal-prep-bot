@@ -111,6 +111,42 @@ class MealPrepBotV2:
         """Obtener perfil de usuario por Telegram ID"""
         return self.data["users"].get(telegram_id)
     
+    def save_generated_recipe(self, telegram_id: str, recipe: Dict, timing_category: str, validation: Dict) -> bool:
+        """Guardar receta generada en el perfil del usuario"""
+        try:
+            user_profile = self.get_user_profile(telegram_id)
+            if not user_profile:
+                return False
+            
+            # Inicializar lista de recetas si no existe
+            if "generated_recipes" not in user_profile:
+                user_profile["generated_recipes"] = []
+            
+            # Crear entrada de receta con metadata
+            recipe_entry = {
+                "id": f"{telegram_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "generated_date": datetime.now().isoformat(),
+                "timing_category": timing_category,
+                "recipe_data": recipe,
+                "validation_score": validation.get("score", 0),
+                "user_rating": None  # Para futuras mejoras
+            }
+            
+            # Agregar al inicio de la lista (más reciente primero)
+            user_profile["generated_recipes"].insert(0, recipe_entry)
+            
+            # Mantener solo las últimas 20 recetas por usuario
+            if len(user_profile["generated_recipes"]) > 20:
+                user_profile["generated_recipes"] = user_profile["generated_recipes"][:20]
+            
+            # Guardar cambios
+            self.data["users"][telegram_id] = user_profile
+            return self.save_data()
+            
+        except Exception as e:
+            logger.error(f"Error saving generated recipe for user {telegram_id}: {e}")
+            return False
+    
     def create_user_if_not_exists(self, telegram_id: str, message) -> bool:
         """Crear usuario si no existe y redirigir a setup de perfil"""
         if telegram_id not in self.data["users"]:
@@ -209,6 +245,7 @@ Soy tu asistente personal para meal prep con batch cooking. Te ayudo a:
 📊 **GESTIÓN:**
 /compras - Lista de compra con complementos
 /cronograma - Ver cronograma de cocción
+/timing - Ver timing nutricional personalizado
 /rating receta 1-5 comentario - Calificar receta
 /favorito receta - Marcar como favorito
 
@@ -351,42 +388,71 @@ def menu_command(message):
 
 @bot.message_handler(commands=['recetas'])
 def recetas_command(message):
-    """Mostrar recetas disponibles por categorías"""
+    """Mostrar recetas generadas por el usuario"""
     telegram_id = str(message.from_user.id)
     
     if not meal_bot.create_user_if_not_exists(telegram_id, message):
         return
     
-    # Mostrar estructura de categorías nuevas
-    response_text = """
-📚 **CATEGORÍAS DE RECETAS V2.0**
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    generated_recipes = user_profile.get("generated_recipes", [])
+    
+    if not generated_recipes:
+        response_text = """
+📚 **TUS RECETAS GENERADAS**
 
-🕐 **POR TIMING NUTRICIONAL:**
+❌ **No tienes recetas generadas aún**
+
+Para generar recetas personalizadas:
+• Usa /generar para crear recetas específicas por timing
+• Usa /buscar [consulta] para recetas con IA
+
+**CATEGORÍAS DISPONIBLES:**
 
 ⚡ **PRE-ENTRENO** (15-30 min antes)
-• Energía rápida: Carbohidratos de absorción rápida
-• Hidratación: Líquidos + electrolitos
-
-💪 **POST-ENTRENO** (0-30 min después)
-• Síntesis proteica: Proteínas completas
-• Reposición glucógeno: Carbohidratos complejos
-
+💪 **POST-ENTRENO** (0-30 min después)  
 🍽️ **COMIDA PRINCIPAL**
-• Equilibrio nutricional: Macros balanceados
-• Saciedad: Fibra + proteína
-
 🥜 **SNACK/COMPLEMENTO**
-• Micronutrientes: Vitaminas y minerales
-• Grasas saludables: Ácidos grasos esenciales
 
-**COMPLEJIDAD:**
-⭐ Muy fácil (15-30 min)
-⭐⭐ Fácil (30-45 min)
-⭐⭐⭐ Moderado (45-60 min)
-⭐⭐⭐⭐ Complejo (60+ min)
-
-**Usa /buscar [tipo de plato] para generar recetas específicas**
+¡Genera tu primera receta con /generar!
 """
+    else:
+        response_text = "📚 **TUS RECETAS GENERADAS**\n\n"
+        
+        # Agrupar por categoría de timing
+        categories = {
+            "pre_entreno": "⚡ **PRE-ENTRENO**",
+            "post_entreno": "💪 **POST-ENTRENO**", 
+            "comida_principal": "🍽️ **COMIDA PRINCIPAL**",
+            "snack_complemento": "🥜 **SNACK/COMPLEMENTO**"
+        }
+        
+        recipes_by_category = {}
+        for recipe in generated_recipes[:10]:  # Mostrar solo las 10 más recientes
+            category = recipe["timing_category"]
+            if category not in recipes_by_category:
+                recipes_by_category[category] = []
+            recipes_by_category[category].append(recipe)
+        
+        for category, category_name in categories.items():
+            if category in recipes_by_category:
+                response_text += f"\n{category_name}\n"
+                for i, recipe in enumerate(recipes_by_category[category][:3], 1):  # Máximo 3 por categoría
+                    recipe_data = recipe["recipe_data"]
+                    name = recipe_data.get("name", "Receta sin nombre")
+                    calories = recipe_data.get("macros_per_portion", {}).get("calories", "N/A")
+                    score = recipe["validation_score"]
+                    date = recipe["generated_date"][:10]  # Solo fecha
+                    
+                    response_text += f"• {name}\n"
+                    response_text += f"  {calories} kcal • ⭐{score}/100 • {date}\n"
+                response_text += "\n"
+        
+        total_recipes = len(generated_recipes)
+        response_text += f"**Total de recetas:** {total_recipes}\n"
+        response_text += f"**Mostrando:** Las más recientes por categoría\n\n"
+        response_text += "💡 **Generar más:** /generar\n"
+        response_text += "🔍 **Búsqueda específica:** /buscar [consulta]"
     
     meal_bot.send_long_message(message.chat.id, response_text, parse_mode='Markdown')
 
@@ -623,8 +689,14 @@ def handle_generation_callback(call):
             recipe = result["recipe"]
             validation = result["validation"]
             
+            # Guardar receta en el perfil del usuario
+            timing_category = request_data["timing_category"]
+            save_success = meal_bot.save_generated_recipe(telegram_id, recipe, timing_category, validation)
+            
             # Formatear y enviar receta
             recipe_text = format_recipe_for_display(recipe, validation)
+            
+            save_status = "✅ Receta guardada en tu historial" if save_success else "⚠️ Receta no pudo guardarse"
             
             success_text = f"""
 🎉 **RECETA GENERADA EXITOSAMENTE**
@@ -635,6 +707,8 @@ def handle_generation_callback(call):
 • Objetivo: {user_profile['basic_data']['objetivo_descripcion']}
 • Available Energy: {user_profile['energy_data']['available_energy']} kcal/kg FFM/día
 • Todos los ingredientes son naturales y no procesados
+
+{save_status}
 
 💡 **¿Quieres otra opción?** Usa el comando /generar de nuevo
 """
@@ -732,10 +806,69 @@ def cronograma_command(message):
         return
     
     user_profile = meal_bot.get_user_profile(telegram_id)
-    cooking_schedule = user_profile['settings'].get('cooking_schedule', 'dos_sesiones')
+    if not user_profile:
+        bot.send_message(message.chat.id, "❌ Error: No se pudo encontrar tu perfil")
+        return
+    
+    # Obtener cronograma con valores por defecto
+    cooking_schedule = user_profile.get('settings', {}).get('cooking_schedule', 'dos_sesiones')
+    
+    # Verificar que existan cooking_schedules en los datos
+    if 'cooking_schedules' not in meal_bot.data:
+        bot.send_message(
+            message.chat.id,
+            "⚠️ **CRONOGRAMA NO DISPONIBLE**\n\n"
+            "Los datos de cronogramas no están disponibles actualmente.\n"
+            "Usa /generar para crear recetas específicas por timing."
+        )
+        return
     
     # Obtener datos del cronograma
     schedule_data = meal_bot.data['cooking_schedules'].get(cooking_schedule, {})
+    
+    # Si no existe el cronograma específico, mostrar cronograma genérico
+    if not schedule_data:
+        response_text = f"""
+⏰ **CRONOGRAMA DE COCCIÓN SEMANAL**
+
+🎯 **Tu cronograma:** Personalizado
+📝 **Descripción:** Cronograma básico de meal prep
+⏱️ **Tiempo estimado:** 2-4 horas
+
+**SESIONES RECOMENDADAS:**
+
+**SESIÓN 1 - Domingo**
+🕐 Horario: 10:00-14:00
+⏰ Duración: 3-4 horas
+📋 Tareas:
+• Preparar proteínas principales
+• Cocinar granos y cereales
+• Procesar verduras
+• Porcionar y almacenar
+
+**SESIÓN 2 - Miércoles** (opcional)
+🕐 Horario: 19:00-20:30
+⏰ Duración: 1-2 horas
+📋 Tareas:
+• Refrescar verduras
+• Preparar snacks
+• Revisar porciones
+
+✅ **VENTAJAS:**
+• Flexibilidad total
+• Adaptable a cualquier horario
+• Permite experimentar
+
+💡 **OPTIMIZACIÓN SEGÚN TU PERFIL:**
+• Objetivo: {user_profile['basic_data']['objetivo_descripcion']}
+• Available Energy: {user_profile['energy_data']['available_energy']} kcal/kg FFM/día
+• Macros diarios: {user_profile['macros']['calories']} kcal
+
+**¿Quieres más opciones?**
+Usa /nueva_semana para explorar cronogramas específicos.
+"""
+        meal_bot.send_long_message(message.chat.id, response_text, parse_mode='Markdown')
+        return
     
     response_text = f"""
 ⏰ **CRONOGRAMA DE COCCIÓN SEMANAL**
@@ -786,6 +919,86 @@ def cronograma_command(message):
 
 **¿Quieres cambiar tu cronograma?**
 Usa /nueva_semana para explorar otras opciones.
+"""
+    
+    meal_bot.send_long_message(message.chat.id, response_text, parse_mode='Markdown')
+
+@bot.message_handler(commands=['timing'])
+def timing_command(message):
+    """Mostrar timing nutricional personalizado según horario de entrenamiento"""
+    telegram_id = str(message.from_user.id)
+    
+    if not meal_bot.create_user_if_not_exists(telegram_id, message):
+        return
+    
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    if not user_profile:
+        bot.send_message(message.chat.id, "❌ Error: No se pudo encontrar tu perfil")
+        return
+    
+    exercise_profile = user_profile.get("exercise_profile", {})
+    training_schedule = exercise_profile.get("training_schedule", "variable")
+    training_desc = exercise_profile.get("training_schedule_desc", "Variable/Cambia")
+    dynamic_timing = exercise_profile.get("dynamic_meal_timing", {})
+    timing_desc = exercise_profile.get("timing_description", {})
+    objetivo = user_profile["basic_data"]["objetivo_descripcion"]
+    
+    response_text = f"""
+⏰ **TU TIMING NUTRICIONAL PERSONALIZADO**
+
+🎯 **Horario de entrenamiento:** {training_desc}
+💪 **Objetivo:** {objetivo}
+
+**DISTRIBUCIÓN ÓPTIMA DE COMIDAS:**
+"""
+    
+    # Iconos para cada comida
+    meal_icons = {
+        "desayuno": "🌅",
+        "almuerzo": "🌞", 
+        "merienda": "🌇",
+        "cena": "🌙"
+    }
+    
+    # Traducir categorías de timing
+    timing_translation = {
+        "pre_entreno": "⚡ PRE-ENTRENO",
+        "post_entreno": "💪 POST-ENTRENO",
+        "comida_principal": "🍽️ COMIDA PRINCIPAL", 
+        "snack_complemento": "🥜 SNACK/COMPLEMENTO"
+    }
+    
+    for meal, timing_category in dynamic_timing.items():
+        icon = meal_icons.get(meal, "🍽️")
+        timing_name = timing_translation.get(timing_category, timing_category.title())
+        response_text += f"\n{icon} **{meal.title()}:** {timing_name}"
+    
+    if timing_desc:
+        response_text += f"""
+
+📝 **ESTRATEGIA NUTRICIONAL:**
+• **Pre-entreno:** {timing_desc.get('pre_timing', 'Adaptado a tu horario')}
+• **Post-entreno:** {timing_desc.get('post_timing', 'Recuperación optimizada')}
+• **Filosofía:** {timing_desc.get('strategy', 'Personalizado según tus necesidades')}
+
+💡 **CÓMO USARLO:**
+• Usa /generar y selecciona el timing de tu próxima comida
+• Las recetas se adaptarán automáticamente a tu horario
+• /recetas te mostrará tus recetas organizadas por timing
+
+🔄 **¿Cambió tu horario?**
+Usa /perfil para actualizar tu horario de entrenamiento.
+"""
+    else:
+        response_text += """
+
+💡 **CÓMO USARLO:**
+• Usa /generar para crear recetas específicas por timing
+• /recetas te mostrará todas tus recetas generadas
+• Cada receta está optimizada para el momento del día
+
+🔄 **¿Quieres optimizar más?**
+Usa /perfil para configurar tu horario de entrenamiento específico.
 """
     
     meal_bot.send_long_message(message.chat.id, response_text, parse_mode='Markdown')
@@ -1187,17 +1400,73 @@ def process_profile_setup(telegram_id: str, message):
             data["duracion_promedio"] = duracion
             meal_bot.user_states[telegram_id]["data"] = data
             
-            # Ir directamente a preferencias de proteínas
+            # Ir a horario de entrenamiento
+            meal_bot.user_states[telegram_id]["step"] = "horario_entrenamiento"
+            
+            keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+            keyboard.add("🌅 Mañana (6:00-12:00)", "🌞 Mediodía (12:00-16:00)")
+            keyboard.add("🌇 Tarde (16:00-20:00)", "🌙 Noche (20:00-24:00)")
+            keyboard.add("🔄 Variable/Cambia")
+            
+            bot.send_message(
+                message.chat.id,
+                f"✅ Duración registrada: {message.text}\n\n"
+                "⏰ **Paso 8C/10:** ¿A qué hora entrenas normalmente?\n\n"
+                "**Esto nos ayuda a optimizar tu timing nutricional:**\n"
+                "• Pre-entreno: 30-60 min antes\n"
+                "• Post-entreno: inmediatamente después\n"
+                "• Comidas principales: horarios que no interfieran\n\n"
+                "**Selecciona tu horario habitual:**",
+                reply_markup=keyboard
+            )
+            
+        elif step == "horario_entrenamiento":
+            # Procesar horario de entrenamiento
+            text = message.text.lower().strip()
+            
+            # Mapear texto a valores estructurados
+            if "mañana" in text or "6:00-12:00" in text:
+                horario = "mañana"
+                horario_desc = "Mañana (6:00-12:00)"
+            elif "mediodía" in text or "mediodia" in text or "12:00-16:00" in text:
+                horario = "mediodia" 
+                horario_desc = "Mediodía (12:00-16:00)"
+            elif "tarde" in text or "16:00-20:00" in text:
+                horario = "tarde"
+                horario_desc = "Tarde (16:00-20:00)"
+            elif "noche" in text or "20:00-24:00" in text:
+                horario = "noche"
+                horario_desc = "Noche (20:00-24:00)"
+            elif "variable" in text or "cambia" in text:
+                horario = "variable"
+                horario_desc = "Variable/Cambia"
+            else:
+                bot.send_message(
+                    message.chat.id,
+                    "❌ **No reconocí ese horario.**\n\n"
+                    "Por favor usa los botones o escribe: mañana, mediodía, tarde, noche, o variable."
+                )
+                return
+            
+            data["horario_entrenamiento"] = horario
+            data["horario_entrenamiento_desc"] = horario_desc
+            meal_bot.user_states[telegram_id]["data"] = data
+            
+            # Ir a preferencias de proteínas
             meal_bot.user_states[telegram_id]["step"] = "gustos_proteinas"
+            
+            # Inicializar lista de proteínas vacía
+            data["liked_proteins"] = []
             
             keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
             keyboard.add("🍗 Pollo", "🥩 Ternera", "🐟 Pescado")
             keyboard.add("🥚 Huevos", "🫘 Legumbres", "🧀 Lácteos") 
             keyboard.add("🌰 Frutos secos", "✅ Todas", "⏭️ Ninguna especial")
+            keyboard.add("➡️ Continuar")
             
             bot.send_message(
                 message.chat.id,
-                f"✅ Duración registrada: {message.text}\n\n"
+                f"✅ Horario registrado: {horario_desc}\n\n"
                 "🍽️ **Paso 9A/10:** ¿Qué PROTEÍNAS prefieres?\n\n"
                 "**Opciones disponibles:**\n"
                 "• 🍗 Pollo\n"
@@ -1209,15 +1478,24 @@ def process_profile_setup(telegram_id: str, message):
                 "• 🌰 Frutos secos\n"
                 "• ✅ Todas\n"
                 "• ⏭️ Ninguna especial\n\n"
-                "Puedes usar los botones o escribir el nombre directamente:",
+                "**PUEDES SELECCIONAR MÚLTIPLES OPCIONES**\n"
+                "Usa ➡️ **Continuar** cuando termines de seleccionar:",
                 reply_markup=keyboard
             )
             
         elif step == "gustos_proteinas":
-            # Procesar selección de proteínas con manejo flexible
+            # Procesar selección múltiple de proteínas
             text = message.text.lower().strip()
             
-            if "ninguna" in text or text == "⏭️ ninguna especial":
+            # Inicializar lista si no existe
+            if "liked_proteins" not in data:
+                data["liked_proteins"] = []
+            
+            # Verificar si quiere continuar
+            if "continuar" in text or text == "➡️ continuar":
+                # Continuar al siguiente paso
+                pass
+            elif "ninguna" in text or text == "⏭️ ninguna especial":
                 data["liked_proteins"] = []
             elif "todas" in text or text == "✅ todas":
                 data["liked_proteins"] = ["pollo", "ternera", "pescado", "huevos", "legumbres", "lacteos", "frutos_secos"]
@@ -1240,26 +1518,47 @@ def process_profile_setup(telegram_id: str, message):
                         break
                 
                 if selected:
-                    data["liked_proteins"] = [selected]
+                    # Agregar a la lista si no está ya incluido
+                    if selected not in data["liked_proteins"]:
+                        data["liked_proteins"].append(selected)
+                        
+                    # Mostrar selección actual y continuar
+                    selected_names = [name.replace("_", " ").title() for name in data["liked_proteins"]]
+                    selection_text = ", ".join(selected_names) if selected_names else "Ninguna"
+                    
+                    bot.send_message(
+                        message.chat.id,
+                        f"✅ **{selected.replace('_', ' ').title()}** añadido\n\n"
+                        f"**Seleccionados:** {selection_text}\n\n"
+                        "Puedes seleccionar más opciones o usar ➡️ **Continuar**"
+                    )
+                    return  # Mantener en el mismo paso
                 else:
                     # Si no reconoce la entrada, pedir clarificación
                     bot.send_message(
                         message.chat.id,
-                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: pollo, ternera, pescado, huevos, legumbres, lacteos, frutos secos, todas, o ninguna."
+                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: pollo, ternera, pescado, huevos, legumbres, lacteos, frutos secos, todas, ninguna, o continuar."
                     )
                     return
             
             meal_bot.user_states[telegram_id]["step"] = "gustos_carbos"
             meal_bot.user_states[telegram_id]["data"] = data
             
+            # Inicializar lista de carbohidratos
+            data["liked_carbs"] = []
+            
             keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
             keyboard.add("🍚 Arroz", "🌾 Quinoa", "🍞 Avena")
             keyboard.add("🥔 Patatas", "🍝 Pasta", "🫓 Pan integral")
             keyboard.add("🍌 Frutas", "✅ Todas", "⏭️ Ninguna especial")
+            keyboard.add("➡️ Continuar")
+            
+            selected_proteins = [name.replace("_", " ").title() for name in data["liked_proteins"]]
+            protein_text = ", ".join(selected_proteins) if selected_proteins else "Ninguna"
             
             bot.send_message(
                 message.chat.id,
-                "✅ Proteínas registradas\n\n"
+                f"✅ Proteínas registradas: {protein_text}\n\n"
                 "🍽️ **Paso 9B/10:** ¿Qué CARBOHIDRATOS prefieres?\n\n"
                 "**Opciones disponibles:**\n"
                 "• 🍚 Arroz\n"
@@ -1271,15 +1570,24 @@ def process_profile_setup(telegram_id: str, message):
                 "• 🍌 Frutas\n"
                 "• ✅ Todas\n"
                 "• ⏭️ Ninguna especial\n\n"
-                "Puedes usar los botones o escribir el nombre:",
+                "**PUEDES SELECCIONAR MÚLTIPLES OPCIONES**\n"
+                "Usa ➡️ **Continuar** cuando termines de seleccionar:",
                 reply_markup=keyboard
             )
             
         elif step == "gustos_carbos":
-            # Procesar carbohidratos con manejo flexible
+            # Procesar selección múltiple de carbohidratos
             text = message.text.lower().strip()
             
-            if "ninguna" in text or text == "⏭️ ninguna especial":
+            # Inicializar lista si no existe
+            if "liked_carbs" not in data:
+                data["liked_carbs"] = []
+            
+            # Verificar si quiere continuar
+            if "continuar" in text or text == "➡️ continuar":
+                # Continuar al siguiente paso
+                pass
+            elif "ninguna" in text or text == "⏭️ ninguna especial":
                 data["liked_carbs"] = []
             elif "todas" in text or text == "✅ todas":
                 data["liked_carbs"] = ["arroz", "quinoa", "avena", "patatas", "pasta", "pan_integral", "frutas"]
@@ -1301,25 +1609,46 @@ def process_profile_setup(telegram_id: str, message):
                         break
                 
                 if selected:
-                    data["liked_carbs"] = [selected]
+                    # Agregar a la lista si no está ya incluido
+                    if selected not in data["liked_carbs"]:
+                        data["liked_carbs"].append(selected)
+                        
+                    # Mostrar selección actual y continuar
+                    selected_names = [name.replace("_", " ").title() for name in data["liked_carbs"]]
+                    selection_text = ", ".join(selected_names) if selected_names else "Ninguna"
+                    
+                    bot.send_message(
+                        message.chat.id,
+                        f"✅ **{selected.replace('_', ' ').title()}** añadido\n\n"
+                        f"**Seleccionados:** {selection_text}\n\n"
+                        "Puedes seleccionar más opciones o usar ➡️ **Continuar**"
+                    )
+                    return  # Mantener en el mismo paso
                 else:
                     bot.send_message(
                         message.chat.id,
-                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: arroz, quinoa, avena, patatas, pasta, pan integral, frutas, todas, o ninguna."
+                        "❌ No reconocí esa opción. Por favor usa los botones o escribe: arroz, quinoa, avena, patatas, pasta, pan integral, frutas, todas, ninguna, o continuar."
                     )
                     return
             
             meal_bot.user_states[telegram_id]["step"] = "gustos_verduras"
             meal_bot.user_states[telegram_id]["data"] = data
             
+            # Inicializar lista de verduras
+            data["liked_vegetables"] = []
+            
             keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
             keyboard.add("🥬 Hojas verdes", "🥦 Crucíferas", "🍅 Solanáceas")
             keyboard.add("🧄 Aromáticas", "🥕 Raíces", "🫑 Pimientos")
             keyboard.add("🥒 Pepináceas", "✅ Todas", "⏭️ Ninguna especial")
+            keyboard.add("➡️ Continuar")
+            
+            selected_carbs = [name.replace("_", " ").title() for name in data["liked_carbs"]]
+            carb_text = ", ".join(selected_carbs) if selected_carbs else "Ninguna"
             
             bot.send_message(
                 message.chat.id,
-                "✅ Carbohidratos registrados\n\n"
+                f"✅ Carbohidratos registrados: {carb_text}\n\n"
                 "🍽️ **Paso 9C/10:** ¿Qué VERDURAS prefieres?\n\n"
                 "**Familias de vegetales disponibles:**\n"
                 "• 🥬 Hojas verdes\n"
@@ -1331,7 +1660,8 @@ def process_profile_setup(telegram_id: str, message):
                 "• 🥒 Pepináceas\n"
                 "• ✅ Todas\n"
                 "• ⏭️ Ninguna especial\n\n"
-                "Puedes usar los botones o escribir el nombre:",
+                "**PUEDES SELECCIONAR MÚLTIPLES OPCIONES**\n"
+                "Usa ➡️ **Continuar** cuando termines de seleccionar:",
                 reply_markup=keyboard
             )
             

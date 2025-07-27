@@ -211,7 +211,16 @@ class UserProfileSystem:
             "exercise_profile": {
                 "activity_factor": activity_factor,
                 "exercise_data": exercise_data,
-                "recommended_timing": self.get_recommended_timing(objetivo)
+                "recommended_timing": self.get_recommended_timing(objetivo),
+                "training_schedule": profile_data.get("horario_entrenamiento", "variable"),
+                "training_schedule_desc": profile_data.get("horario_entrenamiento_desc", "Variable/Cambia"),
+                "dynamic_meal_timing": self.get_dynamic_meal_timing(
+                    profile_data.get("horario_entrenamiento", "variable"), 
+                    objetivo
+                ),
+                "timing_description": self.get_timing_description(
+                    profile_data.get("horario_entrenamiento", "variable")
+                )
             },
             "preferences": profile_data.get("preferences", {}),
             "settings": {
@@ -244,6 +253,94 @@ class UserProfileSystem:
             "mantener": ["comida_principal", "snack_complemento"]
         }
         return timing_recommendations.get(objetivo, ["comida_principal"])
+    
+    def get_dynamic_meal_timing(self, training_schedule: str, objetivo: str) -> Dict[str, str]:
+        """Crear timing dinámico de comidas basado en horario de entrenamiento"""
+        
+        # Horarios base según cuándo entrena
+        timing_templates = {
+            "mañana": {  # Entrenamiento 6:00-12:00
+                "desayuno": "pre_entreno",
+                "almuerzo": "post_entreno", 
+                "merienda": "snack_complemento",
+                "cena": "comida_principal"
+            },
+            "mediodia": {  # Entrenamiento 12:00-16:00
+                "desayuno": "comida_principal",
+                "almuerzo": "pre_entreno",
+                "merienda": "post_entreno",
+                "cena": "comida_principal"
+            },
+            "tarde": {  # Entrenamiento 16:00-20:00
+                "desayuno": "comida_principal",
+                "almuerzo": "comida_principal", 
+                "merienda": "pre_entreno",
+                "cena": "post_entreno"
+            },
+            "noche": {  # Entrenamiento 20:00-24:00
+                "desayuno": "comida_principal",
+                "almuerzo": "comida_principal",
+                "merienda": "snack_complemento",
+                "cena": "pre_entreno"
+            },
+            "variable": {  # Horario variable
+                "desayuno": "comida_principal",
+                "almuerzo": "comida_principal",
+                "merienda": "snack_complemento", 
+                "cena": "comida_principal"
+            }
+        }
+        
+        base_timing = timing_templates.get(training_schedule, timing_templates["variable"])
+        
+        # Ajustar según objetivo
+        if objetivo == "bajar_peso":
+            # Reducir carbohidratos en comidas alejadas del entrenamiento
+            for meal, timing in base_timing.items():
+                if timing == "comida_principal" and meal in ["desayuno", "cena"]:
+                    base_timing[meal] = "snack_complemento"
+                    
+        elif objetivo in ["subir_masa", "subir_masa_lean"]:
+            # Asegurar comidas principales en momentos clave
+            meal_count = sum(1 for timing in base_timing.values() if timing == "comida_principal")
+            if meal_count < 2:
+                # Convertir al menos 2 comidas en principales
+                for meal in ["almuerzo", "cena"]:
+                    if base_timing[meal] != "pre_entreno" and base_timing[meal] != "post_entreno":
+                        base_timing[meal] = "comida_principal"
+        
+        return base_timing
+    
+    def get_timing_description(self, training_schedule: str) -> Dict[str, str]:
+        """Obtener descripción detallada del timing según horario de entrenamiento"""
+        descriptions = {
+            "mañana": {
+                "pre_timing": "Desayuno 30-60 min antes del entrenamiento",
+                "post_timing": "Almuerzo inmediatamente después del entrenamiento",
+                "strategy": "Aprovecha el metabolismo matutino elevado"
+            },
+            "mediodia": {
+                "pre_timing": "Almuerzo ligero 30-60 min antes del entrenamiento", 
+                "post_timing": "Merienda post-entreno para recuperación",
+                "strategy": "Distribuye energía equilibradamente durante el día"
+            },
+            "tarde": {
+                "pre_timing": "Merienda energética 30-60 min antes del entrenamiento",
+                "post_timing": "Cena post-entreno para síntesis proteica nocturna",
+                "strategy": "Optimiza la recuperación durante el sueño"
+            },
+            "noche": {
+                "pre_timing": "Cena ligera 30-60 min antes del entrenamiento",
+                "post_timing": "Snack post-entreno (evitar comidas pesadas)",
+                "strategy": "Minimiza interferencia con el sueño"
+            },
+            "variable": {
+                "pre_timing": "Adapta comidas según horario del día",
+                "post_timing": "Prioriza recuperación inmediata post-entreno",
+                "strategy": "Flexibilidad máxima para horarios cambiantes"
+            }
+        }
+        return descriptions.get(training_schedule, descriptions["variable"])
     
     def update_exercise_data(self, user_profile: Dict, new_exercise_data: List[Dict]) -> Dict:
         """Actualizar datos de ejercicio y recalcular Available Energy"""
