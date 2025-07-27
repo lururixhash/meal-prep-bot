@@ -36,10 +36,24 @@ def format_menu_for_telegram(user_profile: Dict) -> str:
         # Generar distribución diaria por timing
         daily_structure = generate_daily_timing_structure(user_profile)
         
-        # Formatear cada momento del día
-        for timing, details in daily_structure.items():
-            timing_name = format_timing_name(timing)
-            menu_text += f"**{timing_name}:**\n"
+        # Formatear cada comida del día
+        for meal in ["desayuno", "almuerzo", "merienda", "cena"]:
+            if meal not in daily_structure:
+                continue
+                
+            details = daily_structure[meal]
+            timing_type = details.get('timing_type', 'comida_principal')
+            
+            # Nombre de la comida con timing dinámico
+            meal_name = format_timing_name(meal)
+            
+            # Agregar etiqueta de timing si es pre o post entreno
+            if timing_type == "pre_entreno":
+                menu_text += f"**{meal_name} & PRE-ENTRENO:**\n"
+            elif timing_type == "post_entreno":
+                menu_text += f"**{meal_name} & POST-ENTRENO:**\n"
+            else:
+                menu_text += f"**{meal_name}:**\n"
             
             # Descripción del timing
             menu_text += f"_{details['description']}_\n"
@@ -78,80 +92,70 @@ def format_menu_for_telegram(user_profile: Dict) -> str:
 
 def generate_daily_timing_structure(user_profile: Dict) -> Dict:
     """
-    Generar estructura de timing diario personalizada
+    Generar estructura de timing diario personalizada basada en el horario de entrenamiento
     """
     objective = user_profile["basic_data"]["objetivo"]
     daily_calories = user_profile["macros"]["calories"]
     
-    # Distribución de calorías por timing según objetivo
+    # Obtener el timing dinámico del perfil del usuario
+    exercise_profile = user_profile.get("exercise_profile", {})
+    dynamic_meal_timing = exercise_profile.get("dynamic_meal_timing", {
+        "desayuno": "comida_principal",
+        "almuerzo": "comida_principal", 
+        "merienda": "snack_complemento",
+        "cena": "comida_principal"
+    })
+    training_schedule = exercise_profile.get("training_schedule", "variable")
+    
+    # Distribución de calorías equilibrada para 4 comidas
     calorie_distributions = {
         "bajar_peso": {
-            "desayuno_pre": 0.20,    # 20% - Energía para entrenar
-            "almuerzo_post": 0.35,   # 35% - Recuperación post-entreno
-            "cena_principal": 0.30,  # 30% - Comida principal
-            "complementos": 0.15     # 15% - Snacks mediterráneos
+            "desayuno": 0.25,    # 25%
+            "almuerzo": 0.35,    # 35% - Mayor comida
+            "merienda": 0.15,    # 15% - Snack
+            "cena": 0.25         # 25%
         },
         "subir_masa": {
-            "desayuno_pre": 0.25,
-            "almuerzo_post": 0.30,
-            "cena_principal": 0.30,
-            "complementos": 0.15
+            "desayuno": 0.25,
+            "almuerzo": 0.30,
+            "merienda": 0.15,
+            "cena": 0.30
         },
         "recomposicion": {
-            "desayuno_pre": 0.22,
-            "almuerzo_post": 0.33,
-            "cena_principal": 0.30,
-            "complementos": 0.15
+            "desayuno": 0.25,
+            "almuerzo": 0.35,
+            "merienda": 0.15,
+            "cena": 0.25
         },
         "mantener": {
-            "desayuno_pre": 0.25,
-            "almuerzo_post": 0.30,
-            "cena_principal": 0.30,
-            "complementos": 0.15
+            "desayuno": 0.25,
+            "almuerzo": 0.30,
+            "merienda": 0.15,
+            "cena": 0.30
         }
     }
     
     distribution = calorie_distributions.get(objective, calorie_distributions["mantener"])
     
-    # Estructura base de timing
-    timing_structure = {
-        "desayuno_pre": {
-            "description": "Energía rápida pre-entreno (6:30-8:00)",
+    # Obtener horarios según entrenamiento
+    timing_hours = get_timing_hours_by_schedule(training_schedule)
+    
+    # Estructura dinámica de timing
+    timing_structure = {}
+    
+    for meal in ["desayuno", "almuerzo", "merienda", "cena"]:
+        timing_type = dynamic_meal_timing.get(meal, "comida_principal")
+        
+        timing_structure[meal] = {
+            "description": get_meal_description(meal, timing_type, timing_hours[meal]),
             "target_macros": calculate_timing_macros(
-                daily_calories * distribution["desayuno_pre"],
-                "pre_entreno"
+                daily_calories * distribution[meal],
+                timing_type
             ),
-            "recipes": get_timing_recipes("pre_entreno"),
-            "complements": get_timing_complements("desayuno")
-        },
-        "almuerzo_post": {
-            "description": "Recuperación post-entreno (12:00-14:00)",
-            "target_macros": calculate_timing_macros(
-                daily_calories * distribution["almuerzo_post"],
-                "post_entreno"
-            ),
-            "recipes": get_timing_recipes("post_entreno"),
-            "complements": get_timing_complements("almuerzo")
-        },
-        "cena_principal": {
-            "description": "Comida balanceada (19:00-21:00)",
-            "target_macros": calculate_timing_macros(
-                daily_calories * distribution["cena_principal"],
-                "comida_principal"
-            ),
-            "recipes": get_timing_recipes("comida_principal"),
-            "complements": get_timing_complements("cena")
-        },
-        "complementos": {
-            "description": "Snacks mediterráneos distribuidos",
-            "target_macros": calculate_timing_macros(
-                daily_calories * distribution["complementos"],
-                "snack_complemento"
-            ),
-            "recipes": [],
-            "complements": get_timing_complements("snacks")
+            "recipes": get_timing_recipes(timing_type),
+            "complements": get_timing_complements(meal),
+            "timing_type": timing_type
         }
-    }
     
     return timing_structure
 
@@ -210,23 +214,98 @@ def get_timing_complements(meal_time: str) -> List[Dict]:
             {"name": "Yogur griego natural", "portion": "150g"},
             {"name": "Nueces", "portion": "15g"}
         ],
+        "merienda": [
+            {"name": "Pistachos", "portion": "25g"},
+            {"name": "Higos secos", "portion": "2 unidades"}
+        ],
         "cena": [
             {"name": "Aceitunas kalamata", "portion": "20g"},
             {"name": "Queso feta", "portion": "30g"}
         ],
         "snacks": [
-            {"name": "Pistachos", "portion": "25g"},
-            {"name": "Higos secos", "portion": "2 unidades"},
-            {"name": "Aceite oliva virgen extra", "portion": "10ml"}
+            {"name": "Aceite oliva virgen extra", "portion": "10ml"},
+            {"name": "Frutos secos mixtos", "portion": "20g"}
         ]
     }
     
     return complements_by_time.get(meal_time, [])
 
+def get_timing_hours_by_schedule(training_schedule: str) -> Dict[str, str]:
+    """
+    Obtener horarios recomendados para cada comida según horario de entrenamiento
+    """
+    schedule_hours = {
+        "mañana": {  # Entrenamiento 6:00-12:00
+            "desayuno": "6:30-8:00",
+            "almuerzo": "12:30-14:00", 
+            "merienda": "16:00-17:00",
+            "cena": "20:00-21:30"
+        },
+        "mediodia": {  # Entrenamiento 12:00-16:00
+            "desayuno": "7:00-8:30",
+            "almuerzo": "11:30-12:00",
+            "merienda": "16:30-17:30",
+            "cena": "20:00-21:30"
+        },
+        "tarde": {  # Entrenamiento 16:00-20:00
+            "desayuno": "7:00-8:30",
+            "almuerzo": "12:00-14:00", 
+            "merienda": "15:30-16:00",
+            "cena": "20:30-22:00"
+        },
+        "noche": {  # Entrenamiento 20:00-24:00
+            "desayuno": "7:00-8:30",
+            "almuerzo": "12:00-14:00",
+            "merienda": "16:00-17:00",
+            "cena": "19:30-20:00"
+        },
+        "variable": {  # Horario variable
+            "desayuno": "7:00-9:00",
+            "almuerzo": "12:00-14:00",
+            "merienda": "16:00-17:00",
+            "cena": "20:00-21:30"
+        }
+    }
+    
+    return schedule_hours.get(training_schedule, schedule_hours["variable"])
+
+def get_meal_description(meal: str, timing_type: str, hour_range: str) -> str:
+    """
+    Generar descripción de comida según su función nutricional
+    """
+    timing_descriptions = {
+        "pre_entreno": "Energía rápida pre-entreno",
+        "post_entreno": "Recuperación post-entreno",
+        "comida_principal": "Comida balanceada",
+        "snack_complemento": "Snack complemento"
+    }
+    
+    base_description = timing_descriptions.get(timing_type, "Comida balanceada")
+    return f"{base_description} ({hour_range})"
+
 def format_timing_name(timing_key: str) -> str:
     """
-    Formatear nombres de timing para display
+    Formatear nombres de timing para display dinámico
     """
+    meal_icons = {
+        "desayuno": "🌅",
+        "almuerzo": "🍽️", 
+        "merienda": "🥜",
+        "cena": "🌙"
+    }
+    
+    meal_names = {
+        "desayuno": "DESAYUNO",
+        "almuerzo": "ALMUERZO",
+        "merienda": "MERIENDA", 
+        "cena": "CENA"
+    }
+    
+    # Si es una de las 4 comidas principales, usar formato dinámico
+    if timing_key in meal_icons:
+        return f"{meal_icons[timing_key]} {meal_names[timing_key]}"
+    
+    # Fallback para nombres antiguos
     timing_names = {
         "desayuno_pre": "🌅 DESAYUNO & PRE-ENTRENO",
         "almuerzo_post": "🍽️ ALMUERZO & POST-ENTRENO", 
