@@ -187,7 +187,8 @@ class UserProfileSystem:
                 "edad": edad,
                 "sexo": sexo,
                 "objetivo": objetivo,
-                "objetivo_descripcion": self.get_objective_description(objetivo)
+                "objetivo_descripcion": self.get_objective_description(objetivo),
+                "enfoque_dietetico": profile_data.get("enfoque_dietetico", "fitness")
             },
             "body_composition": {
                 "bmr": round(bmr),

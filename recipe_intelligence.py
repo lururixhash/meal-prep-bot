@@ -530,6 +530,275 @@ class RecipeIntelligence:
         normalized_score = (score + 2.0) / 4.0  # score está entre -2 y 2
         return max(0.0, min(1.0, normalized_score))
     
+    def register_recipe_selection(self, telegram_id: str, selected_recipe: Dict, timing_category: str, 
+                                  option_number: int, total_options: int, user_profile: Dict = None) -> Dict:
+        """
+        Registrar la selección de una receta específica de múltiples opciones
+        Esto permite aprender qué tipos de recetas prefiere el usuario
+        """
+        try:
+            # Crear un registro de selección implícita
+            # La selección implica una valoración positiva (4/5)
+            implied_rating = 4  # Asumir que la selección = buena valoración
+            
+            # Añadir metadatos de selección
+            selection_metadata = {
+                "selection_context": "multiple_options",
+                "option_selected": option_number,
+                "total_options": total_options,
+                "timing_category": timing_category,
+                "selection_timestamp": datetime.now().isoformat(),
+                "telegram_id": telegram_id
+            }
+            
+            # Añadir metadatos a la receta
+            enhanced_recipe = selected_recipe.copy()
+            enhanced_recipe["selection_metadata"] = selection_metadata
+            enhanced_recipe["categoria_timing"] = timing_category
+            
+            # Usar el perfil de usuario real si está disponible
+            if not user_profile:
+                # Crear un perfil de usuario temporal si es necesario
+                user_profile = {
+                    "basic_data": {"objetivo_descripcion": "Usuario activo"},
+                    "preferences": {"liked_foods": [], "disliked_foods": []}
+                }
+            
+            # Registrar como valoración positiva implícita
+            learning_result = self.learn_from_rating(
+                user_profile, 
+                enhanced_recipe, 
+                implied_rating,
+                f"Selección automática - opción {option_number} de {total_options}"
+            )
+            
+            return {
+                "success": True,
+                "selection_registered": True,
+                "implied_rating": implied_rating,
+                "learning_result": learning_result,
+                "selection_metadata": selection_metadata,
+                "user_profile_updated": user_profile if user_profile else None
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Error registering recipe selection: {str(e)}"
+            }
+    
+    def register_recipe_rejection(self, telegram_id: str, rejected_options: List[Dict], 
+                                 selected_option: int, timing_category: str, user_profile: Dict = None) -> Dict:
+        """
+        Registrar las opciones que el usuario NO seleccionó
+        Esto ayuda a aprender qué evitar en futuras recomendaciones
+        """
+        try:
+            rejection_results = []
+            
+            for i, recipe in enumerate(rejected_options):
+                if i + 1 != selected_option:  # Skip la opción seleccionada
+                    # Valoración negativa implícita para opciones no seleccionadas
+                    implied_rating = 2  # Valoración baja, pero no extrema
+                    
+                    # Metadatos de rechazo
+                    rejection_metadata = {
+                        "rejection_context": "not_selected_from_options",
+                        "option_position": i + 1,
+                        "selected_instead": selected_option,
+                        "timing_category": timing_category,
+                        "rejection_timestamp": datetime.now().isoformat()
+                    }
+                    
+                    # Procesar rechazo (con menor peso que selección)
+                    enhanced_recipe = recipe.copy()
+                    enhanced_recipe["rejection_metadata"] = rejection_metadata
+                    enhanced_recipe["categoria_timing"] = timing_category
+                    
+                    # Usar el perfil de usuario real si está disponible
+                    if not user_profile:
+                        user_profile = {
+                            "basic_data": {"objetivo_descripcion": "Usuario activo"},
+                            "preferences": {"liked_foods": [], "disliked_foods": []}
+                        }
+                    
+                    # Registrar con valoración baja
+                    rejection_result = self.learn_from_rating(
+                        user_profile,
+                        enhanced_recipe,
+                        implied_rating,
+                        f"Rechazo implícito - no seleccionada (pos. {i+1})"
+                    )
+                    
+                    rejection_results.append({
+                        "option_position": i + 1,
+                        "recipe_name": recipe.get("nombre", "Sin nombre"),
+                        "learning_result": rejection_result
+                    })
+            
+            return {
+                "success": True,
+                "rejections_processed": len(rejection_results),
+                "rejection_results": rejection_results
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Error registering recipe rejections: {str(e)}"
+            }
+    
+    def get_user_preference_insights(self, user_profile: Dict) -> Dict:
+        """
+        Obtener insights detallados sobre las preferencias aprendidas del usuario
+        """
+        intelligence_profile = user_profile.get("recipe_intelligence", {})
+        
+        if not intelligence_profile:
+            return {
+                "insights_available": False,
+                "message": "Sin datos de aprendizaje disponibles"
+            }
+        
+        learned_prefs = intelligence_profile.get("learned_preferences", {})
+        stats = intelligence_profile.get("basic_statistics", {})
+        
+        # Análisis de ingredientes
+        ingredient_insights = self._analyze_ingredient_patterns(learned_prefs.get("ingredients", {}))
+        
+        # Análisis de métodos de cocción
+        method_insights = self._analyze_cooking_method_patterns(learned_prefs.get("cooking_methods", {}))
+        
+        # Análisis de patrones nutricionales
+        nutrition_insights = self._analyze_nutrition_patterns(learned_prefs.get("macro_patterns", {}))
+        
+        # Análisis de timing
+        timing_insights = self._analyze_timing_patterns(learned_prefs.get("timing_patterns", {}))
+        
+        return {
+            "insights_available": True,
+            "total_data_points": stats.get("total_ratings", 0),
+            "confidence_level": self._calculate_intelligence_score(intelligence_profile),
+            "ingredient_insights": ingredient_insights,
+            "method_insights": method_insights,
+            "nutrition_insights": nutrition_insights,
+            "timing_insights": timing_insights,
+            "recommendation_strength": self._calculate_recommendation_strength(intelligence_profile)
+        }
+    
+    def _analyze_ingredient_patterns(self, ingredient_prefs: Dict) -> Dict:
+        """Analizar patrones en preferencias de ingredientes"""
+        if not ingredient_prefs:
+            return {"pattern": "insufficient_data"}
+        
+        positive_ingredients = [(ing, score) for ing, score in ingredient_prefs.items() if score > 0.3]
+        negative_ingredients = [(ing, score) for ing, score in ingredient_prefs.items() if score < -0.3]
+        
+        # Categorizar ingredientes
+        protein_sources = [ing for ing, _ in positive_ingredients if any(protein in ing.lower() 
+                          for protein in ["pollo", "salmón", "atún", "huevo", "yogur", "queso"])]
+        
+        plant_foods = [ing for ing, _ in positive_ingredients if any(plant in ing.lower()
+                      for plant in ["brócoli", "espinaca", "tomate", "cebolla", "ajo"])]
+        
+        return {
+            "strong_preferences": len(positive_ingredients),
+            "strong_dislikes": len(negative_ingredients),
+            "preferred_proteins": protein_sources[:3],
+            "preferred_plants": plant_foods[:3],
+            "dietary_pattern": self._infer_dietary_pattern(positive_ingredients, negative_ingredients)
+        }
+    
+    def _analyze_cooking_method_patterns(self, method_prefs: Dict) -> Dict:
+        """Analizar patrones en métodos de cocción"""
+        if not method_prefs:
+            return {"pattern": "insufficient_data"}
+        
+        preferred_methods = [(method, score) for method, score in method_prefs.items() if score > 0.2]
+        avoided_methods = [(method, score) for method, score in method_prefs.items() if score < -0.2]
+        
+        # Clasificar por complejidad
+        simple_methods = [method for method, _ in preferred_methods if method in ["plancha", "vapor", "crudo"]]
+        complex_methods = [method for method, _ in preferred_methods if method in ["horno", "guisado"]]
+        
+        return {
+            "preferred_methods": [method for method, _ in preferred_methods],
+            "avoided_methods": [method for method, _ in avoided_methods],
+            "complexity_preference": "complex" if len(complex_methods) > len(simple_methods) else "simple",
+            "versatility_score": len(preferred_methods) / 6.0  # Total possible methods
+        }
+    
+    def _analyze_nutrition_patterns(self, macro_prefs: Dict) -> Dict:
+        """Analizar patrones nutricionales"""
+        if not macro_prefs:
+            return {"pattern": "insufficient_data"}
+        
+        preferred_pattern = max(macro_prefs.items(), key=lambda x: x[1])
+        
+        return {
+            "preferred_macro_pattern": preferred_pattern[0],
+            "pattern_strength": preferred_pattern[1],
+            "flexibility": 1.0 - (max(macro_prefs.values()) - min(macro_prefs.values())),
+            "nutrition_focus": self._infer_nutrition_focus(preferred_pattern[0])
+        }
+    
+    def _analyze_timing_patterns(self, timing_prefs: Dict) -> Dict:
+        """Analizar patrones de timing nutricional"""
+        if not timing_prefs:
+            return {"pattern": "insufficient_data"}
+        
+        preferred_timing = max(timing_prefs.items(), key=lambda x: x[1])
+        
+        return {
+            "preferred_timing": preferred_timing[0],
+            "timing_flexibility": len([t for t in timing_prefs.values() if t > 0]),
+            "training_focus": preferred_timing[0] in ["pre_entreno", "post_entreno"]
+        }
+    
+    def _infer_dietary_pattern(self, positive_ingredients: List, negative_ingredients: List) -> str:
+        """Inferir patrón dietético general"""
+        if not positive_ingredients:
+            return "insufficient_data"
+        
+        # Contar categorías
+        animal_proteins = sum(1 for ing, _ in positive_ingredients if any(
+            protein in ing.lower() for protein in ["pollo", "pavo", "salmón", "atún", "huevo"]
+        ))
+        
+        plant_foods = sum(1 for ing, _ in positive_ingredients if any(
+            plant in ing.lower() for plant in ["verdura", "fruta", "legumbre", "cereal"]
+        ))
+        
+        if animal_proteins > plant_foods * 1.5:
+            return "protein_focused"
+        elif plant_foods > animal_proteins * 1.5:
+            return "plant_focused"
+        else:
+            return "balanced"
+    
+    def _infer_nutrition_focus(self, macro_pattern: str) -> str:
+        """Inferir enfoque nutricional"""
+        focus_mapping = {
+            "high_protein": "muscle_building",
+            "high_carbs": "performance_focused",
+            "high_fat": "metabolic_flexibility",
+            "balanced": "general_health"
+        }
+        return focus_mapping.get(macro_pattern, "general_health")
+    
+    def _calculate_recommendation_strength(self, intelligence_profile: Dict) -> str:
+        """Calcular fuerza de las recomendaciones"""
+        score = self._calculate_intelligence_score(intelligence_profile)
+        
+        if score > 75:
+            return "very_strong"
+        elif score > 50:
+            return "strong"
+        elif score > 25:
+            return "moderate"
+        else:
+            return "weak"
+
     def format_intelligence_report_for_telegram(self, intelligence_profile: Dict, user_profile: Dict) -> str:
         """
         Formatear reporte de inteligencia para mostrar en Telegram

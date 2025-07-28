@@ -320,18 +320,35 @@ def perfil_command(message):
     # Iniciar proceso de configuración de perfil
     meal_bot.user_states[telegram_id] = {
         "state": "profile_setup",
-        "step": "peso",
+        "step": "enfoque_dietetico",
         "data": {}
     }
+    
+    # Crear teclado para enfoque dietético
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        types.InlineKeyboardButton("🇪🇸 Tradicional Español - Platos equilibrados, ingredientes mediterráneos", callback_data="approach_tradicional"),
+        types.InlineKeyboardButton("💪 Fitness Orientado - Optimización nutricional, macros precisos", callback_data="approach_fitness")
+    )
     
     bot.send_message(
         message.chat.id,
         "👤 **CONFIGURACIÓN DE PERFIL NUTRICIONAL**\n\n"
-        "Te haré algunas preguntas para calcular tus macros personalizados "
-        "basados en evidencia científica.\n\n"
-        "📏 **Paso 1/10:** ¿Cuál es tu peso actual en kg?\n"
-        "_(Ejemplo: 70)_",
-        parse_mode='Markdown'
+        "Antes de calcular tus macros personalizados, necesito conocer tu enfoque preferido:\n\n"
+        "🍽️ **¿Qué enfoque nutricional prefieres?**\n\n"
+        "**🇪🇸 Tradicional Español:**\n"
+        "• Platos mediterráneos equilibrados\n"
+        "• Ingredientes locales y de temporada\n"
+        "• Recetas familiares y culturales\n"
+        "• Enfoque en sabor y tradición\n\n"
+        "**💪 Fitness Orientado:**\n"
+        "• Optimización de macronutrientes\n"
+        "• Timing nutricional preciso\n"
+        "• Maximización de resultados deportivos\n"
+        "• Enfoque científico y medible\n\n"
+        "📍 _Esta elección influirá en el tipo de recetas y recomendaciones que recibirás_",
+        parse_mode='Markdown',
+        reply_markup=keyboard
     )
 
 @bot.message_handler(commands=['mis_macros'])
@@ -1350,6 +1367,134 @@ Para poder valorar recetas necesitas:
         response_text,
         parse_mode='Markdown',
         reply_markup=keyboard
+    )
+
+@bot.message_handler(commands=['insights_ia'])
+def insights_ia_command(message):
+    """Ver análisis detallado de preferencias aprendidas por la IA"""
+    telegram_id = str(message.from_user.id)
+    
+    if not meal_bot.create_user_if_not_exists(telegram_id, message):
+        return
+    
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    # Obtener insights detallados de preferencias
+    insights = meal_bot.recipe_intelligence.get_user_preference_insights(user_profile)
+    
+    if not insights.get("insights_available"):
+        not_available_text = """
+🧠 **ANÁLISIS DE PREFERENCIAS IA**
+
+❌ **Sin datos suficientes para análisis**
+
+Para activar el análisis avanzado necesitas:
+• 🤖 Generar recetas con `/generar`
+• ⭐ Valorar recetas con `/valorar_receta`
+• 🔄 Seleccionar opciones del sistema múltiple
+
+💡 **¿Qué incluye el análisis IA?**
+• Patrones de ingredientes preferidos/evitados
+• Métodos de cocción que más te gustan
+• Análisis nutricional personalizado
+• Preferencias de timing (desayuno, almuerzo, etc.)
+• Tendencias dietéticas identificadas
+• Fuerza de las recomendaciones
+
+🚀 **Comienza generando tu primera receta:**
+"""
+        
+        keyboard = types.InlineKeyboardMarkup(row_width=2)
+        keyboard.add(
+            types.InlineKeyboardButton("🤖 Generar Receta", callback_data="gen_comida_principal"),
+            types.InlineKeyboardButton("⭐ Valorar Existentes", url="t.me/" + bot.get_me().username + "?start=valorar")
+        )
+        
+        bot.send_message(
+            message.chat.id,
+            not_available_text,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        return
+    
+    # Formatear insights detallados
+    insights_text = f"""
+🧠 **ANÁLISIS AVANZADO DE PREFERENCIAS IA**
+
+👤 **Usuario:** {user_profile['basic_data']['objetivo_descripcion']}
+📊 **Datos analizados:** {insights['total_data_points']} selecciones/valoraciones
+🎯 **Confianza del sistema:** {insights['confidence_level']:.1f}/100
+💪 **Fuerza recomendaciones:** {insights['recommendation_strength'].replace('_', ' ').title()}
+
+"""
+    
+    # Análisis de ingredientes
+    ingredient_insights = insights['ingredient_insights']
+    if ingredient_insights.get('strong_preferences', 0) > 0:
+        insights_text += "🥗 **ANÁLISIS DE INGREDIENTES:**\n"
+        insights_text += f"• Preferencias fuertes: {ingredient_insights['strong_preferences']}\n"
+        insights_text += f"• Rechazos identificados: {ingredient_insights['strong_dislikes']}\n"
+        
+        if ingredient_insights.get('preferred_proteins'):
+            insights_text += f"• Proteínas favoritas: {', '.join(ingredient_insights['preferred_proteins'])}\n"
+        
+        if ingredient_insights.get('preferred_plants'):
+            insights_text += f"• Vegetales preferidos: {', '.join(ingredient_insights['preferred_plants'])}\n"
+        
+        insights_text += f"• Patrón dietético: {ingredient_insights['dietary_pattern'].replace('_', ' ').title()}\n\n"
+    
+    # Análisis de métodos de cocción
+    method_insights = insights['method_insights']
+    if method_insights.get('preferred_methods'):
+        insights_text += "👨‍🍳 **MÉTODOS DE COCCIÓN:**\n"
+        insights_text += f"• Métodos preferidos: {', '.join(method_insights['preferred_methods'])}\n"
+        insights_text += f"• Complejidad: {method_insights['complexity_preference'].title()}\n"
+        insights_text += f"• Versatilidad: {method_insights['versatility_score']:.1%}\n\n"
+    
+    # Análisis nutricional
+    nutrition_insights = insights['nutrition_insights']
+    if nutrition_insights.get('preferred_macro_pattern'):
+        insights_text += "🎯 **PATRONES NUTRICIONALES:**\n"
+        insights_text += f"• Patrón de macros: {nutrition_insights['preferred_macro_pattern'].replace('_', ' ').title()}\n"
+        insights_text += f"• Enfoque nutricional: {nutrition_insights['nutrition_focus'].replace('_', ' ').title()}\n"
+        insights_text += f"• Flexibilidad: {nutrition_insights['flexibility']:.1%}\n\n"
+    
+    # Análisis de timing
+    timing_insights = insights['timing_insights']
+    if timing_insights.get('preferred_timing'):
+        insights_text += "⏰ **PREFERENCIAS DE TIMING:**\n"
+        insights_text += f"• Timing preferido: {timing_insights['preferred_timing'].replace('_', ' ').title()}\n"
+        insights_text += f"• Flexibilidad horaria: {timing_insights['timing_flexibility']}/4\n"
+        insights_text += f"• Enfoque en entreno: {'Sí' if timing_insights['training_focus'] else 'No'}\n\n"
+    
+    # Recomendaciones para mejorar
+    insights_text += "💡 **RECOMENDACIONES PARA MEJORAR IA:**\n"
+    
+    if insights['total_data_points'] < 10:
+        insights_text += "• Genera y valora más recetas (objetivo: 10+ valoraciones)\n"
+    
+    if insights['confidence_level'] < 50:
+        insights_text += "• Usa toda la escala de valoración (1-5 estrellas)\n"
+        insights_text += "• Selecciona opciones variadas en el sistema múltiple\n"
+    
+    if insights['recommendation_strength'] == 'weak':
+        insights_text += "• Interactúa más frecuentemente con las recomendaciones\n"
+    
+    insights_text += f"""
+
+🤖 **COMANDOS IA AVANZADOS:**
+• `/valorar_receta` - Valorar para aprender
+• `/generar` - Recetas personalizadas
+• 🧠 Ver Reporte IA (en valorar recetas)
+
+**¡La IA mejora automáticamente con cada interacción!**
+"""
+    
+    meal_bot.send_long_message(
+        message.chat.id,
+        insights_text,
+        parse_mode='Markdown'
     )
 
 @bot.message_handler(commands=['progreso'])
@@ -2643,7 +2788,7 @@ def handle_favorite_callback(call):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('gen_'))
 def handle_generation_callback(call):
-    """Manejar callbacks de generación de recetas"""
+    """Manejar callbacks de generación de múltiples opciones de recetas"""
     telegram_id = str(call.from_user.id)
     user_profile = meal_bot.get_user_profile(telegram_id)
     
@@ -2690,68 +2835,97 @@ def handle_generation_callback(call):
         bot.answer_callback_query(call.id, "❌ Opción no válida", show_alert=True)
         return
     
-    bot.answer_callback_query(call.id, "🤖 Generando receta personalizada...")
+    bot.answer_callback_query(call.id, "🤖 Generando 5 opciones personalizadas...")
     
     # Mensaje de procesamiento
+    timing_display = {
+        "pre_entreno": "⚡ PRE-ENTRENO",
+        "post_entreno": "💪 POST-ENTRENO",
+        "desayuno": "🌅 DESAYUNO",
+        "almuerzo": "🍽️ ALMUERZO",
+        "merienda": "🥜 MERIENDA",
+        "cena": "🌙 CENA"
+    }.get(request_data['timing_category'], request_data['timing_category'].upper())
+    
     processing_msg = bot.send_message(
         call.message.chat.id,
-        f"🤖 **GENERANDO RECETA PERSONALIZADA**\n\n"
-        f"🎯 **Tipo:** {request_data['timing_category'].replace('_', ' ').title()}\n"
-        f"⚡ **Función:** {request_data['function_category'].replace('_', ' ').title()}\n"
-        f"📊 **Macros objetivo:** {request_data['target_macros']['calories']} kcal\n\n"
+        f"🤖 **GENERANDO 5 OPCIONES PARA {timing_display}**\n\n"
+        f"📊 **Macros objetivo:** {request_data['target_macros']['calories']} kcal por opción\n"
+        f"👤 **Tu perfil:** {user_profile['basic_data']['objetivo_descripcion']}\n\n"
         "⏳ Procesando con IA...\n"
-        "🧬 Adaptando a tu perfil...\n"
-        "✅ Validando ingredientes naturales...",
+        "🎨 Creando variedad de ingredientes...\n"
+        "👨‍🍳 Variando técnicas de cocción...\n"
+        "🧬 Adaptando a tus preferencias...\n"
+        "✅ Validando calidad nutricional...\n\n"
+        "*Esto puede tomar 10-15 segundos...*",
         parse_mode='Markdown'
     )
     
     try:
-        # Generar receta con IA
-        result = meal_bot.ai_generator.generate_recipe(user_profile, request_data)
+        # Generar múltiples opciones con IA
+        result = meal_bot.ai_generator.generate_multiple_recipes(user_profile, request_data, num_options=5)
         
         # Borrar mensaje de procesamiento
         bot.delete_message(call.message.chat.id, processing_msg.message_id)
         
         if result["success"]:
-            recipe = result["recipe"]
-            validation = result["validation"]
+            # Importar la función de formateo
+            from ai_integration import format_multiple_recipes_for_display
             
-            # Guardar receta en el perfil del usuario
-            timing_category = request_data["timing_category"]
-            save_success = meal_bot.save_generated_recipe(telegram_id, recipe, timing_category, validation)
+            # Formatear opciones para display
+            options_text = format_multiple_recipes_for_display(result, request_data['timing_category'])
             
-            # Formatear y enviar receta
-            recipe_text = format_recipe_for_display(recipe, validation)
+            # Crear botones de selección
+            keyboard = types.InlineKeyboardMarkup(row_width=2)
             
-            save_status = "✅ Receta guardada en tu historial" if save_success else "⚠️ Receta no pudo guardarse"
+            # Botones para cada opción
+            options = result.get("options", [])
+            for i, option in enumerate(options[:5], 1):  # Máximo 5 opciones
+                recipe_name = option["recipe"]["nombre"]
+                # Acortar nombre si es muy largo
+                display_name = recipe_name if len(recipe_name) <= 25 else f"{recipe_name[:22]}..."
+                keyboard.add(
+                    types.InlineKeyboardButton(
+                        f"✅ Opción {i}: {display_name}", 
+                        callback_data=f"select_recipe_{i}_{request_data['timing_category']}"
+                    )
+                )
             
-            success_text = f"""
-🎉 **RECETA GENERADA EXITOSAMENTE**
-
-{recipe_text}
-
-🤖 **Generada específicamente para tu perfil:**
-• Objetivo: {user_profile['basic_data']['objetivo_descripcion']}
-• Available Energy: {user_profile['energy_data']['available_energy']} kcal/kg FFM/día
-• Todos los ingredientes son naturales y no procesados
-
-{save_status}
-
-💡 **¿Quieres otra opción?** Usa el comando /generar de nuevo
-"""
+            # Botón para generar más opciones
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "🔄 Generar 5 opciones nuevas", 
+                    callback_data=call.data  # Reutilizar el mismo callback
+                )
+            )
             
-            # Crear botones de favoritos si la receta se guardó exitosamente
-            markup = None
-            if save_success and recipe_id:
-                markup = create_favorite_buttons(telegram_id, recipe_id)
+            # Enviar opciones con botones
+            meal_bot.send_long_message(
+                call.message.chat.id, 
+                options_text, 
+                parse_mode='Markdown', 
+                reply_markup=keyboard
+            )
             
-            meal_bot.send_long_message(call.message.chat.id, success_text, parse_mode='Markdown', reply_markup=markup)
+            # Guardar las opciones temporalmente para cuando el usuario seleccione
+            if "temp_recipe_options" not in user_profile:
+                user_profile["temp_recipe_options"] = {}
+            
+            user_profile["temp_recipe_options"][request_data['timing_category']] = {
+                "options": options,
+                "generated_at": datetime.now().isoformat(),
+                "request_data": request_data
+            }
+            
+            # Guardar en la base de datos
+            meal_bot.data["users"][telegram_id] = user_profile
+            meal_bot.save_data()
             
         else:
             error_msg = result.get("error", "Error desconocido")
             bot.send_message(
                 call.message.chat.id,
-                f"❌ **Error generando receta:**\n{error_msg}\n\n"
+                f"❌ **Error generando opciones:**\n{error_msg}\n\n"
                 "💡 **Intenta:**\n"
                 "• Usar /generar de nuevo\n"
                 "• Verificar tu conexión\n"
@@ -2760,14 +2934,162 @@ def handle_generation_callback(call):
             )
             
     except Exception as e:
-        logger.error(f"Error in recipe generation: {e}")
-        bot.delete_message(call.message.chat.id, processing_msg.message_id)
+        logger.error(f"Error in multiple recipe generation: {e}")
+        try:
+            bot.delete_message(call.message.chat.id, processing_msg.message_id)
+        except:
+            pass
         bot.send_message(
             call.message.chat.id,
-            "❌ **Error técnico** generando la receta.\n"
+            "❌ **Error técnico** generando las opciones.\n"
             "Inténtalo de nuevo en unos momentos.",
             parse_mode='Markdown'
         )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('select_recipe_'))
+def handle_recipe_selection_callback(call):
+    """Manejar la selección de una receta específica de las múltiples opciones"""
+    telegram_id = str(call.from_user.id)
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    if not user_profile:
+        bot.answer_callback_query(call.id, "❌ Configura tu perfil primero", show_alert=True)
+        return
+    
+    try:
+        # Parsear callback data: select_recipe_{option_number}_{timing_category}
+        parts = call.data.split('_')
+        if len(parts) != 4:
+            bot.answer_callback_query(call.id, "❌ Formato de callback inválido", show_alert=True)
+            return
+        
+        option_number = int(parts[2])
+        timing_category = parts[3]
+        
+        # Obtener opciones temporales guardadas
+        temp_options = user_profile.get("temp_recipe_options", {}).get(timing_category)
+        if not temp_options:
+            bot.answer_callback_query(call.id, "❌ Opciones expiradas. Genera nuevas opciones.", show_alert=True)
+            return
+        
+        options = temp_options.get("options", [])
+        if option_number < 1 or option_number > len(options):
+            bot.answer_callback_query(call.id, "❌ Opción no válida", show_alert=True)
+            return
+        
+        # Obtener la receta seleccionada
+        selected_option = options[option_number - 1]
+        recipe = selected_option["recipe"]
+        validation = selected_option["validation"]
+        request_data = temp_options["request_data"]
+        
+        bot.answer_callback_query(call.id, f"✅ Opción {option_number} seleccionada!")
+        
+        # Guardar receta en el perfil del usuario
+        save_success = meal_bot.save_generated_recipe(telegram_id, recipe, timing_category, validation)
+        
+        # Formatear receta completa para mostrar
+        from ai_integration import format_recipe_for_display
+        recipe_text = format_recipe_for_display(recipe, validation)
+        
+        save_status = "✅ Receta guardada en tu historial" if save_success else "⚠️ Receta no pudo guardarse"
+        
+        # Datos del perfil para personalización
+        timing_display = {
+            "pre_entreno": "⚡ PRE-ENTRENO",
+            "post_entreno": "💪 POST-ENTRENO", 
+            "desayuno": "🌅 DESAYUNO",
+            "almuerzo": "🍽️ ALMUERZO",
+            "merienda": "🥜 MERIENDA",
+            "cena": "🌙 CENA"
+        }.get(timing_category, timing_category.upper())
+        
+        success_text = f"""
+🎉 **RECETA SELECCIONADA - OPCIÓN {option_number}**
+
+{recipe_text}
+
+🤖 **Generada específicamente para tu perfil:**
+• **Momento:** {timing_display}
+• **Objetivo:** {user_profile['basic_data']['objetivo_descripcion']}
+• **Available Energy:** {user_profile['energy_data']['available_energy']} kcal/kg FFM/día
+• **Ingredientes:** 100% naturales y no procesados
+• **Optimizada:** Meal prep y conservación
+
+{save_status}
+
+💡 **Próximos pasos:**
+• `/generar` - Generar más opciones de recetas
+• `/recetas` - Ver todas tus recetas guardadas
+• `/valorar_receta` - Entrena la IA con tu feedback
+• `/menu` - Ver tu menú semanal personalizado
+"""
+        
+        # Limpiar opciones temporales después de la selección
+        if "temp_recipe_options" in user_profile:
+            if timing_category in user_profile["temp_recipe_options"]:
+                del user_profile["temp_recipe_options"][timing_category]
+            
+            # Guardar cambios
+            meal_bot.data["users"][telegram_id] = user_profile
+            meal_bot.save_data()
+        
+        # Crear botones adicionales
+        keyboard = types.InlineKeyboardMarkup(row_width=2)
+        keyboard.add(
+            types.InlineKeyboardButton("🤖 Generar más opciones", callback_data=f"gen_{timing_category}"),
+            types.InlineKeyboardButton("⭐ Valorar esta receta", callback_data="valorar_ultima_receta")
+        )
+        keyboard.add(
+            types.InlineKeyboardButton("📋 Ver mis recetas", callback_data="view_all_recipes"),
+            types.InlineKeyboardButton("📅 Planificar semana", callback_data="theme_auto")
+        )
+        
+        # Enviar confirmación con receta completa
+        meal_bot.send_long_message(
+            call.message.chat.id, 
+            success_text, 
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        
+        # Sistema de aprendizaje: registrar la selección y rechazos
+        if hasattr(meal_bot, 'recipe_intelligence'):
+            try:
+                # Registrar la receta seleccionada (valoración positiva implícita)
+                selection_result = meal_bot.recipe_intelligence.register_recipe_selection(
+                    telegram_id, 
+                    recipe, 
+                    timing_category,
+                    option_number,
+                    len(options),
+                    user_profile
+                )
+                
+                # Registrar las opciones no seleccionadas (valoración negativa implícita)
+                all_recipes = [opt["recipe"] for opt in options]
+                rejection_result = meal_bot.recipe_intelligence.register_recipe_rejection(
+                    telegram_id,
+                    all_recipes,
+                    option_number,
+                    timing_category,
+                    user_profile
+                )
+                
+                logger.info(f"Learning system updated: selection={selection_result.get('success')}, rejections={rejection_result.get('success')}")
+                
+                # Guardar el perfil actualizado con los aprendizajes
+                if selection_result.get('success'):
+                    meal_bot.save_user_profile(telegram_id, user_profile)
+                
+            except Exception as e:
+                logger.error(f"Error registering recipe learning: {e}")
+        
+    except ValueError:
+        bot.answer_callback_query(call.id, "❌ Número de opción inválido", show_alert=True)
+    except Exception as e:
+        logger.error(f"Error handling recipe selection: {e}")
+        bot.answer_callback_query(call.id, "❌ Error procesando selección", show_alert=True)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('schedule_'))
 def handle_schedule_callback(call):
@@ -3319,7 +3641,17 @@ def process_profile_setup(telegram_id: str, message):
     data = user_state.get("data", {})
     
     try:
-        if step == "peso":
+        if step == "enfoque_dietetico":
+            # Este paso se maneja por callbacks, no por texto
+            bot.send_message(
+                message.chat.id,
+                "⚠️ Por favor, selecciona tu enfoque dietético usando los botones de arriba.\n\n"
+                "Si no los ves, usa `/perfil` para empezar de nuevo.",
+                parse_mode='Markdown'
+            )
+            return
+            
+        elif step == "peso":
             peso = float(message.text)
             if not (30 <= peso <= 300):
                 raise ValueError("Peso fuera de rango válido")
@@ -4337,6 +4669,7 @@ def process_profile_setup(telegram_id: str, message):
                     "objetivo": data["objetivo"],
                     "activity_factor": data["activity_factor"],
                     "exercise_data": exercise_data,
+                    "enfoque_dietetico": data.get("enfoque_dietetico", "fitness"),  # Default fitness
                     "preferences": {
                         "liked_foods": all_liked_foods,
                         "liked_proteins": data.get("liked_proteins", []),
@@ -5231,6 +5564,45 @@ def setup_webhook():
         logger.info(f"✅ Webhook configurado: {webhook_url}")
         return True
     return False
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('approach_'))
+def handle_approach_callback(call):
+    """Manejar la selección del enfoque dietético"""
+    telegram_id = str(call.from_user.id)
+    
+    # Verificar que el usuario esté en el proceso de configuración
+    user_state = meal_bot.user_states.get(telegram_id)
+    if not user_state or user_state.get("state") != "profile_setup" or user_state.get("step") != "enfoque_dietetico":
+        bot.answer_callback_query(call.id, "❌ Sesión expirada. Usa /perfil para empezar de nuevo.")
+        return
+    
+    try:
+        # Procesar la selección
+        approach = call.data.split('_')[1]  # 'tradicional' o 'fitness'
+        
+        # Guardar el enfoque seleccionado
+        user_state["data"]["enfoque_dietetico"] = approach
+        
+        # Avanzar al siguiente paso
+        user_state["step"] = "peso"
+        
+        # Confirmar selección y continuar
+        approach_name = "🇪🇸 Tradicional Español" if approach == "tradicional" else "💪 Fitness Orientado"
+        bot.answer_callback_query(call.id, f"✅ Enfoque seleccionado: {approach_name}")
+        
+        # Continuar con el flujo normal del perfil
+        bot.send_message(
+            call.message.chat.id,
+            f"✅ **Enfoque seleccionado:** {approach_name}\n\n"
+            "Perfecto, ahora continuemos con tu información física para calcular tus macros personalizados.\n\n"
+            "📏 **Paso 1/9:** ¿Cuál es tu peso actual en kg?\n"
+            "_(Ejemplo: 70)_",
+            parse_mode='Markdown'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing approach selection: {e}")
+        bot.answer_callback_query(call.id, "❌ Error procesando selección")
 
 def main():
     """Función principal"""

@@ -50,23 +50,73 @@ class ClaudePromptSystem:
                     "carbs_target": "high",
                     "protein_target": "low",
                     "fat_target": "very_low",
-                    "fiber_target": "low"
+                    "fiber_target": "low",
+                    "description": "Energía rápida 15-30 min antes del entrenamiento"
                 },
                 "post_entreno": {
                     "protein_target": "very_high",
                     "carbs_target": "moderate",
                     "fat_target": "low",
-                    "timing_window": "30_minutes"
+                    "timing_window": "30_minutes",
+                    "description": "Recuperación muscular 0-30 min después del entrenamiento"
+                },
+                "desayuno": {
+                    "protein_target": "moderate_high",
+                    "carbs_target": "moderate",
+                    "fat_target": "moderate",
+                    "fiber_target": "moderate",
+                    "typical_foods": ["frutas", "avena", "huevos", "frutos_secos", "queso", "yogur"],
+                    "cooking_complexity": "simple_to_moderate",
+                    "cultural_style": "fitness_oriented",
+                    "meal_characteristics": ["energético", "ligero", "nutritivo", "fácil_digestión"],
+                    "description": "Primera comida del día, energética y nutritiva"
+                },
+                "almuerzo": {
+                    "balance": "optimal",
+                    "satiety": "very_high",
+                    "nutrient_density": "high",
+                    "protein_target": "high",
+                    "carbs_target": "high",
+                    "fat_target": "moderate",
+                    "cooking_complexity": "elaborate",
+                    "meal_characteristics": ["sustancioso", "completo", "saciante", "principal_del_día"],
+                    "description": "Comida principal del día, elaborada y completa"
+                },
+                "merienda": {
+                    "micronutrients": "high",
+                    "healthy_fats": "high",
+                    "portion_control": "important",
+                    "protein_target": "moderate",
+                    "carbs_target": "low_moderate",
+                    "fat_target": "moderate_high",
+                    "typical_foods": ["frutos_secos", "frutas", "yogur", "cheese", "energy_balls"],
+                    "cooking_complexity": "simple",
+                    "meal_characteristics": ["snack", "saludable", "controlado", "micronutrientes"],
+                    "description": "Snack saludable de tarde, rico en micronutrientes"
+                },
+                "cena": {
+                    "balance": "optimal",
+                    "satiety": "high",
+                    "digestibility": "high",
+                    "protein_target": "high",
+                    "carbs_target": "low_moderate",
+                    "fat_target": "moderate",
+                    "cooking_complexity": "elaborate",
+                    "meal_characteristics": ["ligera", "digestiva", "elaborada", "nocturna"],
+                    "avoid_characteristics": ["pesada", "exceso_carbohidratos", "estimulante"],
+                    "description": "Cena elaborada pero ligera, fácil digestión"
                 },
                 "comida_principal": {
                     "balance": "optimal",
                     "satiety": "high",
-                    "nutrient_density": "high"
+                    "nutrient_density": "high",
+                    "description": "Comida balanceada y completa"
                 },
                 "snack_complemento": {
                     "micronutrients": "high",
                     "healthy_fats": "high",
-                    "portion_control": "important"
+                    "portion_control": "important",
+                    "description": "Snack complementario nutritivo"
                 }
             }
         }
@@ -79,6 +129,7 @@ class ClaudePromptSystem:
         
         # Extraer datos del perfil
         objective = user_profile["basic_data"]["objetivo_descripcion"]
+        enfoque_dietetico = user_profile["basic_data"].get("enfoque_dietetico", "fitness")
         calories = user_profile["macros"]["calories"]
         protein_g = user_profile["macros"]["protein_g"]
         carbs_g = user_profile["macros"]["carbs_g"]
@@ -101,6 +152,7 @@ ERES UN EXPERTO EN NUTRICIÓN DEPORTIVA Y MEAL PREP. Tu tarea es generar UNA rec
 
 PERFIL DEL USUARIO:
 - Objetivo: {objective}
+- Enfoque dietético: {self._get_enfoque_description(enfoque_dietetico)}
 - Available Energy: {ea_value} kcal/kg FFM/día
 - Macros diarios totales: {calories} kcal ({protein_g}P/{carbs_g}C/{fat_g}F)
 - Alimentos preferidos: {', '.join(liked_foods) if liked_foods else 'Ninguna preferencia específica'}
@@ -182,6 +234,138 @@ DEBES RESPONDER EN ESTE FORMATO JSON EXACTO (sin texto adicional antes o despué
 }}
 
 GENERA UNA SOLA RECETA que cumpla perfectamente con todos estos criterios. La receta debe ser práctica, deliciosa y optimizada para meal prep.
+"""
+        
+        return prompt
+    
+    def create_multiple_recipe_generation_prompt(self, user_profile: Dict, request_data: Dict, num_options: int = 5) -> str:
+        """
+        Crear prompt para generar múltiples opciones de recetas (5 por defecto)
+        """
+        
+        # Extraer datos del perfil
+        objective = user_profile["basic_data"]["objetivo_descripcion"]
+        enfoque_dietetico = user_profile["basic_data"].get("enfoque_dietetico", "fitness")
+        calories = user_profile["macros"]["calories"]
+        protein_g = user_profile["macros"]["protein_g"]
+        carbs_g = user_profile["macros"]["carbs_g"]
+        fat_g = user_profile["macros"]["fat_g"]
+        ea_value = user_profile["energy_data"]["available_energy"]
+        
+        # Datos de la solicitud
+        timing_category = request_data.get("timing_category", "comida_principal")
+        function_category = request_data.get("function_category", "equilibrio_nutricional")
+        target_macros = request_data.get("target_macros", {})
+        
+        # Preferencias del usuario
+        preferences = user_profile.get("preferences", {})
+        liked_foods = preferences.get("liked_foods", [])
+        disliked_foods = preferences.get("disliked_foods", [])
+        cooking_methods = preferences.get("cooking_methods", [])
+
+        prompt = f"""
+ERES UN EXPERTO EN NUTRICIÓN DEPORTIVA Y MEAL PREP. Tu tarea es generar EXACTAMENTE {num_options} OPCIONES DIFERENTES de recetas que cumplan con estos criterios:
+
+PERFIL DEL USUARIO:
+- Objetivo: {objective}
+- Enfoque dietético: {self._get_enfoque_description(enfoque_dietetico)}
+- Available Energy: {ea_value} kcal/kg FFM/día
+- Macros diarios totales: {calories} kcal ({protein_g}P/{carbs_g}C/{fat_g}F)
+- Alimentos preferidos: {', '.join(liked_foods) if liked_foods else 'Ninguna preferencia específica'}
+- Alimentos NO deseados: {', '.join(disliked_foods) if disliked_foods else 'Ninguna restricción'}
+- Métodos de cocción preferidos: {', '.join(cooking_methods) if cooking_methods else 'Cualquier método'}
+
+REQUERIMIENTOS DE LAS RECETAS:
+- Categoría de timing: {timing_category.replace('_', ' ').title()}
+- Función nutricional: {function_category.replace('_', ' ').title()}
+- Macros objetivo para cada receta: {target_macros.get('calories', 400)} kcal
+- Proteína objetivo: {target_macros.get('protein', 25)}g
+- Carbohidratos objetivo: {target_macros.get('carbs', 40)}g
+- Grasas objetivo: {target_macros.get('fat', 15)}g
+
+CRITERIOS OBLIGATORIOS PARA TODAS LAS OPCIONES:
+1. SOLO ingredientes naturales, frescos, no procesados
+2. Sin conservantes, colorantes, saborizantes artificiales
+3. Optimizada para meal prep (se conserva bien 3-5 días)
+4. Tiempo de preparación máximo: 45 minutos
+5. Macros dentro del ±10% del objetivo
+6. Ingredientes disponibles en supermercados españoles
+
+TIMING ESPECÍFICO - {timing_category.upper()}:
+{self._get_timing_guidelines(timing_category)}
+
+VARIEDAD REQUERIDA:
+- Cada opción debe usar INGREDIENTES PRINCIPALES DIFERENTES
+- Técnicas de cocción variadas (horno, sartén, vapor, crudo, etc.)
+- Diferentes perfiles de sabor (mediterráneo, asiático, mexicano, etc.)
+- Niveles de complejidad variados
+- Diferentes texturas y presentaciones
+
+INGREDIENTES PROHIBIDOS:
+Embutidos, salchichas, jamón procesado, quesos procesados, salsas comerciales, aderezos industriales, condimentos artificiales, conservantes, colorantes, saborizantes, comida precocinada.
+
+INGREDIENTES RECOMENDADOS:
+Carnes frescas, pescados frescos, huevos, legumbres secas, cereales integrales, quinoa, verduras frescas, frutas frescas, frutos secos, aceites prensado en frío, hierbas frescas, especias naturales.
+
+DEBES RESPONDER EN ESTE FORMATO JSON EXACTO (sin texto adicional antes o después):
+
+{{
+  "opciones_recetas": [
+    {{
+      "opcion_numero": 1,
+      "momento_sugerido": "{timing_category}",
+      "nivel_match": "perfecto",
+      "receta": {{
+        "nombre": "Nombre descriptivo opción 1",
+        "categoria_timing": "{timing_category}",
+        "categoria_funcion": "{function_category}",
+        "dificultad": "⭐⭐",
+        "tiempo_prep": 25,
+        "porciones": 4,
+        "ingredientes": [
+          {{
+            "nombre": "Ingrediente 1",
+            "cantidad": 200,
+            "unidad": "g",
+            "categoria": "proteina_animal"
+          }}
+        ],
+        "preparacion": [
+          "1. Paso detallado de preparación...",
+          "2. Otro paso específico...",
+          "3. Paso final con detalles de cocción..."
+        ],
+        "macros_por_porcion": {{
+          "calorias": {target_macros.get('calories', 400)},
+          "proteinas": {target_macros.get('protein', 25)},
+          "carbohidratos": {target_macros.get('carbs', 40)},
+          "grasas": {target_macros.get('fat', 15)},
+          "fibra": 8
+        }},
+        "meal_prep_tips": [
+          "Consejo específico de conservación...",
+          "Tip de almacenamiento..."
+        ],
+        "timing_consumo": "{self._get_consumption_timing(timing_category)}",
+        "nivel_saciedad": "alto",
+        "perfil_sabor": "mediterráneo",
+        "tecnica_principal": "horno",
+        "adaptaciones": [
+          "Variación posible 1...",
+          "Opción de sustitución..."
+        ]
+      }}
+    }}
+  ]
+}}
+
+IMPORTANTE: 
+- GENERA EXACTAMENTE {num_options} OPCIONES DIFERENTES
+- Cada opción debe tener ingredientes principales únicos
+- Varía las técnicas de cocción entre opciones
+- Asegúrate que todas cumplan con los criterios del timing específico
+- Incluye variedad de perfiles de sabor
+- Diferentes niveles de complejidad entre las opciones
 """
         
         return prompt
@@ -440,6 +624,55 @@ OBJETIVO: Maximizar síntesis proteica y reposición de glucógeno
 - Grasas moderadas (no interferir absorción)
 - Consumir dentro de 30 minutos post-ejercicio
 - Incluir aminoácidos esenciales""",
+
+            "desayuno": """
+OBJETIVO: Primera comida energética y nutritiva - ENFOQUE FITNESS
+- INGREDIENTES PREFERIDOS: frutas frescas, avena, huevos, frutos secos, queso, yogur
+- Proteína moderada-alta (20-30g) para saciedad matinal
+- Carbohidratos complejos + simples para energía sostenida
+- Grasas saludables (frutos secos, aguacate, aceite oliva)
+- Fibra moderada para digestión saludable
+- EVITAR: bollería industrial, azúcares refinados, procesados
+- EJEMPLOS: Smoothie bowls, overnight oats, tortillas con vegetales, yogur con frutos secos
+- Complejidad: Simple a moderada (15-30 min preparación)
+- Saciedad: 3-4 horas hasta almuerzo""",
+
+            "almuerzo": """
+OBJETIVO: Comida principal del día - ELABORADA Y COMPLETA
+- Proteína alta (30-40g) como base del plato principal
+- Carbohidratos complejos (arroz integral, quinoa, legumbres)
+- Verduras abundantes (50% del plato visual)
+- Grasas saludables integradas en la preparación
+- COMPLEJIDAD: ELABORADA - Múltiples técnicas de cocción
+- Saciedad muy alta (4-5 horas)
+- EJEMPLOS: Guisos complejos, platos al horno, preparaciones con salsas caseras
+- Tiempo de preparación: 30-60+ minutos
+- Debe ser la comida más sustanciosa del día""",
+
+            "merienda": """
+OBJETIVO: Snack saludable rico en micronutrientes
+- INGREDIENTES TÍPICOS: frutos secos, frutas, yogur, queso, energy balls caseras
+- Proteína moderada (10-20g)
+- Carbohidratos controlados, preferiblemente de frutas
+- Grasas saludables como componente principal (frutos secos)
+- Micronutrientes concentrados (vitaminas, minerales)
+- Porciones controladas (150-300 kcal)
+- COMPLEJIDAD: SIMPLE - Preparación mínima o sin cocción
+- EJEMPLOS: Mix de frutos secos y frutas deshidratadas, yogur con nueces, manzana con mantequilla de almendra
+- Fácil transporte y conservación""",
+
+            "cena": """
+OBJETIVO: Cena elaborada pero ligera y digestiva
+- Proteína alta (25-35g) pero de fácil digestión
+- Carbohidratos bajos-moderados (evitar exceso nocturno)
+- Verduras como componente principal
+- Grasas moderadas, preferiblemente omega-3
+- COMPLEJIDAD: ELABORADA - Técnicas sofisticadas pero ligeras
+- DIGESTIBILIDAD: Muy importante para el descanso
+- EVITAR: Comidas muy pesadas, exceso de carbohidratos, alimentos estimulantes
+- EJEMPLOS: Pescados al horno con vegetales, ensaladas gourmet, sopas elaboradas, platos al vapor
+- Tiempo preparación: 30-45 minutos
+- Debe satisfacer pero no generar pesadez""",
             
             "comida_principal": """
 OBJETIVO: Nutrición balanceada y saciedad prolongada
@@ -470,11 +703,25 @@ OBJETIVO: Complementar macros y aportar micronutrientes
         timing_recommendations = {
             "pre_entreno": "15-30 minutos antes del entrenamiento",
             "post_entreno": "Inmediatamente después del entrenamiento (ventana 0-30 min)",
+            "desayuno": "Primera comida del día (7:00-9:00h). Ideal 2-3h antes del entrenamiento matinal",
+            "almuerzo": "Comida principal del mediodía (12:00-14:00h). Mejor momento para comidas elaboradas",
+            "merienda": "Media tarde (16:00-18:00h). Entre almuerzo y cena, o pre/post entreno",
+            "cena": "Última comida del día (20:00-22:00h). Mínimo 2h antes de dormir",
             "comida_principal": "2-3 horas antes o después del entrenamiento",
             "snack_complemento": "Entre comidas principales o según macros faltantes"
         }
         
         return timing_recommendations.get(timing_category, "Según necesidades individuales")
+    
+    def _get_enfoque_description(self, enfoque: str) -> str:
+        """
+        Obtener descripción detallada del enfoque dietético
+        """
+        descriptions = {
+            "tradicional": "Tradicional Español - Platos mediterráneos equilibrados, ingredientes locales, sabor y cultura prioritarios",
+            "fitness": "Fitness Orientado - Optimización nutricional, timing preciso, maximización de resultados deportivos"
+        }
+        return descriptions.get(enfoque, descriptions["fitness"])
     
     def validate_prompt_response(self, response_text: str) -> Dict:
         """

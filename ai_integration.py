@@ -540,6 +540,188 @@ GENERA UNA NUEVA RECETA que resuelva estos problemas manteniendo todos los demá
         
         self.recipe_cache[cache_key] = result
     
+    def generate_multiple_recipes(self, user_profile: Dict, request_data: Dict, num_options: int = 5) -> Dict:
+        """
+        Generar múltiples opciones de recetas usando Claude API
+        """
+        if not self.available:
+            return {
+                "success": False,
+                "error": "AI service not available. Check API key configuration.",
+                "options": [],
+                "total_generated": 0
+            }
+        
+        try:
+            # Crear prompt estructurado para múltiples opciones
+            prompt = self.prompt_system.create_multiple_recipe_generation_prompt(
+                user_profile, request_data, num_options
+            )
+            
+            # Verificar cache
+            cache_key = self._generate_cache_key(f"multi_{num_options}_{prompt}")
+            if cache_key in self.recipe_cache:
+                logger.info("📋 Using cached multiple recipes")
+                return self.recipe_cache[cache_key]
+            
+            # Llamada a Claude API
+            logger.info(f"🤖 Generating {num_options} recipe options with Claude API...")
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=8000,  # Más tokens para múltiples recetas
+                temperature=0.4,  # Un poco más de creatividad para variedad
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
+            
+            # Extraer contenido de la respuesta
+            response_text = response.content[0].text.strip()
+            
+            # Parsear respuesta JSON
+            try:
+                response_data = json.loads(response_text)
+            except json.JSONDecodeError:
+                logger.error("❌ Failed to parse multiple recipes response as JSON")
+                return self._fallback_multiple_recipes(user_profile, request_data, num_options)
+            
+            # Validar estructura
+            if "opciones_recetas" not in response_data:
+                logger.error("❌ Missing 'opciones_recetas' in response")
+                return self._fallback_multiple_recipes(user_profile, request_data, num_options)
+            
+            options = response_data["opciones_recetas"]
+            
+            # Validar cada receta
+            validated_options = []
+            for i, option in enumerate(options):
+                try:
+                    recipe_data = option.get("receta")
+                    if recipe_data:
+                        # Validar receta con el sistema de validación
+                        recipe_validation = self.validator.validate_recipe(recipe_data)
+                        
+                        # Solo incluir recetas con puntuación aceptable
+                        if recipe_validation["overall_score"] >= 60:  # Umbral más bajo para opciones múltiples
+                            validated_options.append({
+                                "option_number": option.get("opcion_numero", i + 1),
+                                "suggested_moment": option.get("momento_sugerido", request_data.get("timing_category")),
+                                "match_level": option.get("nivel_match", "bueno"),
+                                "recipe": recipe_data,
+                                "validation": recipe_validation,
+                                "generation_metadata": {
+                                    "generated_at": datetime.now().isoformat(),
+                                    "option_index": i + 1
+                                }
+                            })
+                        else:
+                            logger.warning(f"⚠️ Option {i+1} failed validation with score {recipe_validation['overall_score']}")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Error validating option {i+1}: {str(e)}")
+                    continue
+            
+            # Verificar que tenemos suficientes opciones válidas
+            if len(validated_options) < 2:
+                logger.warning(f"⚠️ Only {len(validated_options)} valid options generated, trying fallback")
+                return self._fallback_multiple_recipes(user_profile, request_data, num_options)
+            
+            result = {
+                "success": True,
+                "options": validated_options,
+                "total_generated": len(validated_options),
+                "requested_count": num_options,
+                "generation_metadata": {
+                    "model_used": self.model,
+                    "generated_at": datetime.now().isoformat(),
+                    "prompt_tokens": len(prompt.split()),
+                    "response_tokens": len(response_text.split()),
+                    "timing_category": request_data.get("timing_category"),
+                    "function_category": request_data.get("function_category")
+                }
+            }
+            
+            # Guardar en cache si es exitoso
+            self._cache_result(cache_key, result)
+            
+            logger.info(f"✅ Generated {len(validated_options)} valid recipe options successfully")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Error generating multiple recipes: {str(e)}")
+            return {
+                "success": False,
+                "error": f"API error: {str(e)}",
+                "options": [],
+                "total_generated": 0
+            }
+    
+    def _fallback_multiple_recipes(self, user_profile: Dict, request_data: Dict, num_options: int) -> Dict:
+        """
+        Generar múltiples recetas usando el método de una sola receta repetidamente
+        """
+        logger.info(f"🔄 Attempting fallback generation for {num_options} recipes...")
+        
+        validated_options = []
+        attempts = 0
+        max_attempts = num_options * 2  # Máximo el doble de intentos
+        
+        while len(validated_options) < num_options and attempts < max_attempts:
+            attempts += 1
+            
+            try:
+                # Generar una receta individual
+                single_result = self.generate_recipe(user_profile, request_data)
+                
+                if single_result["success"]:
+                    # Formatear como opción múltiple
+                    option = {
+                        "option_number": len(validated_options) + 1,
+                        "suggested_moment": request_data.get("timing_category"),
+                        "match_level": "fallback",
+                        "recipe": single_result["recipe"],
+                        "validation": single_result["validation"],
+                        "generation_metadata": {
+                            "generated_at": datetime.now().isoformat(),
+                            "fallback_attempt": attempts,
+                            "method": "single_recipe_fallback"
+                        }
+                    }
+                    
+                    # Evitar duplicados por nombre
+                    recipe_names = [opt["recipe"]["nombre"] for opt in validated_options]
+                    if single_result["recipe"]["nombre"] not in recipe_names:
+                        validated_options.append(option)
+                        logger.info(f"✅ Fallback option {len(validated_options)} generated")
+                    
+            except Exception as e:
+                logger.error(f"❌ Fallback attempt {attempts} failed: {str(e)}")
+                continue
+        
+        if len(validated_options) == 0:
+            return {
+                "success": False,
+                "error": "Failed to generate any valid recipe options",
+                "options": [],
+                "total_generated": 0
+            }
+        
+        return {
+            "success": True,
+            "options": validated_options,
+            "total_generated": len(validated_options),
+            "requested_count": num_options,
+            "fallback_used": True,
+            "generation_metadata": {
+                "method": "fallback_multiple_single",
+                "attempts_made": attempts,
+                "generated_at": datetime.now().isoformat()
+            }
+        }
+    
     def get_api_status(self) -> Dict:
         """
         Obtener estado actual de la API
@@ -620,6 +802,103 @@ def format_recipe_for_display(recipe: Dict, validation: Dict) -> str:
     except Exception as e:
         logger.error(f"Error formatting recipe for display: {e}")
         return f"**Error mostrando receta:** {str(e)}"
+
+def format_multiple_recipes_for_display(multiple_result: Dict, timing_category: str) -> str:
+    """
+    Formatear múltiples opciones de recetas para mostrar en Telegram
+    """
+    try:
+        if not multiple_result.get("success"):
+            return f"❌ **Error generando opciones:** {multiple_result.get('error', 'Error desconocido')}"
+        
+        options = multiple_result.get("options", [])
+        total_generated = multiple_result.get("total_generated", 0)
+        
+        if total_generated == 0:
+            return "❌ **No se pudieron generar opciones válidas**\n\nIntenta con otro momento del día o usa /buscar con términos específicos."
+        
+        # Encabezado
+        timing_names = {
+            "desayuno": "🌅 DESAYUNO",
+            "almuerzo": "🍽️ ALMUERZO", 
+            "merienda": "🥜 MERIENDA",
+            "cena": "🌙 CENA",
+            "pre_entreno": "⚡ PRE-ENTRENO",
+            "post_entreno": "💪 POST-ENTRENO"
+        }
+        
+        timing_display = timing_names.get(timing_category, timing_category.replace('_', ' ').title())
+        
+        formatted = f"🍽️ **{total_generated} OPCIONES PARA {timing_display}**\n\n"
+        formatted += f"✨ **Selecciona tu favorita:**\n\n"
+        
+        # Formatear cada opción
+        for i, option in enumerate(options, 1):
+            recipe = option.get("recipe", {})
+            validation = option.get("validation", {})
+            suggested_moment = option.get("suggested_moment", timing_category)
+            
+            # Encabezado de la opción
+            name = recipe.get("nombre", f"Opción {i}")
+            difficulty = recipe.get("dificultad", "⭐")
+            prep_time = recipe.get("tiempo_prep", 0)
+            
+            formatted += f"**{i}. {name}**\n"
+            formatted += f"🔧 {difficulty} • ⏱️ {prep_time} min"
+            
+            # Momento sugerido si es diferente al solicitado
+            if suggested_moment != timing_category:
+                suggested_display = timing_names.get(suggested_moment, suggested_moment)
+                formatted += f" • 💡 Sugerido para {suggested_display}"
+            
+            formatted += "\n"
+            
+            # Macros
+            macros = recipe.get("macros_por_porcion", {})
+            calories = macros.get("calorias", 0)
+            protein = macros.get("proteinas", 0)
+            carbs = macros.get("carbohidratos", 0)
+            fat = macros.get("grasas", 0)
+            
+            formatted += f"📊 {calories} kcal • {protein}P • {carbs}C • {fat}G\n"
+            
+            # Ingredientes principales (solo los primeros 3)
+            ingredients = recipe.get("ingredientes", [])
+            main_ingredients = [ing.get("nombre", "") for ing in ingredients[:3]]
+            if main_ingredients:
+                formatted += f"🛒 {', '.join(main_ingredients)}\n"
+            
+            # Técnica principal y perfil de sabor
+            technique = recipe.get("tecnica_principal", "")
+            flavor_profile = recipe.get("perfil_sabor", "")
+            if technique or flavor_profile:
+                formatted += f"👨‍🍳 {technique.title()}"
+                if flavor_profile:
+                    formatted += f" • 🌍 {flavor_profile.title()}"
+                formatted += "\n"
+            
+            # Score de validación
+            score = validation.get("overall_score", 0)
+            if score > 0:
+                status_emoji = "✅" if score >= 80 else "⚠️" if score >= 60 else "❌"
+                formatted += f"{status_emoji} Calidad: {score}/100\n"
+            
+            formatted += "\n"
+        
+        # Footer con instrucciones
+        formatted += "🎯 **¿Cómo seleccionar?**\n"
+        formatted += "• Toca el botón ✅ de tu opción favorita\n"
+        formatted += "• Usa 🔄 para generar 5 nuevas opciones\n"
+        formatted += "• Todas están optimizadas para meal prep\n\n"
+        
+        if multiple_result.get("fallback_used"):
+            formatted += "ℹ️ *Opciones generadas con método alternativo*\n"
+        
+        return formatted
+        
+    except Exception as e:
+        logger.error(f"Error formatting multiple recipes for display: {e}")
+        return f"❌ **Error mostrando opciones:** {str(e)}"
 
 # Ejemplo de uso
 if __name__ == "__main__":
