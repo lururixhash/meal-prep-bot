@@ -12,13 +12,21 @@
         "sintesis_proteica": [],
         "reposicion_glucogeno": []
       },
-      "comida_principal": {
+      "desayuno": {
         "equilibrio_nutricional": [],
         "saciedad": []
       },
-      "snack_complemento": {
+      "almuerzo": {
+        "equilibrio_nutricional": [],
+        "saciedad": []
+      },
+      "merienda": {
         "micronutrientes": [],
         "grasas_saludables": []
+      },
+      "cena": {
+        "equilibrio_nutricional": [],
+        "saciedad": []
       }
     }
   },

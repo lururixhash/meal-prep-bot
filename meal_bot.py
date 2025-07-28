@@ -24,6 +24,12 @@ from claude_prompt_system import ClaudePromptSystem
 from recipe_validator import RecipeValidator
 from ai_integration import AIRecipeGenerator, format_recipe_for_display
 from menu_display_system import format_menu_for_telegram
+from shopping_list_generator import ShoppingListGenerator
+from weekly_planner import WeeklyPlanner
+from recipe_intelligence import RecipeIntelligence
+from progress_tracker import ProgressTracker
+from meal_prep_scheduler import MealPrepScheduler
+from nutrition_analytics import NutritionAnalytics
 
 from config import (
     TELEGRAM_TOKEN, ANTHROPIC_API_KEY, WEBHOOK_URL, WEBHOOK_PATH, USE_WEBHOOK
@@ -57,6 +63,12 @@ class MealPrepBotV2:
         self.profile_system = UserProfileSystem(self.database_file)
         self.prompt_system = ClaudePromptSystem()
         self.validator = RecipeValidator()
+        self.shopping_generator = ShoppingListGenerator()
+        self.weekly_planner = WeeklyPlanner()
+        self.recipe_intelligence = RecipeIntelligence()
+        self.progress_tracker = ProgressTracker()
+        self.meal_prep_scheduler = MealPrepScheduler()
+        self.nutrition_analytics = NutritionAnalytics()
         self.ai_generator = AIRecipeGenerator(
             ANTHROPIC_API_KEY, 
             self.prompt_system, 
@@ -139,6 +151,21 @@ class MealPrepBotV2:
             if len(user_profile["generated_recipes"]) > 20:
                 user_profile["generated_recipes"] = user_profile["generated_recipes"][:20]
             
+            # También guardar en recent_generated_recipes para sistema de valoración
+            if "recent_generated_recipes" not in user_profile:
+                user_profile["recent_generated_recipes"] = []
+            
+            # Agregar receta con ID único para valoración
+            recipe_for_rating = recipe.copy()
+            recipe_for_rating["recipe_id"] = recipe_entry["id"]
+            recipe_for_rating["generated_at"] = recipe_entry["generated_date"]
+            
+            user_profile["recent_generated_recipes"].append(recipe_for_rating)
+            
+            # Mantener solo las últimas 10 recetas para valoración
+            if len(user_profile["recent_generated_recipes"]) > 10:
+                user_profile["recent_generated_recipes"] = user_profile["recent_generated_recipes"][-10:]
+            
             # Guardar cambios
             self.data["users"][telegram_id] = user_profile
             return self.save_data()
@@ -214,54 +241,76 @@ meal_bot = MealPrepBotV2()
 
 @bot.message_handler(commands=['start'])
 def start_command(message):
-    """Comando de inicio"""
+    """Comando de inicio con personalización visual"""
     telegram_id = str(message.from_user.id)
+    user_profile = meal_bot.get_user_profile(telegram_id)
     
-    welcome_text = """
-🍽️ ¡Bienvenido al Meal Prep Bot!
+    if user_profile:
+        # Usuario existente - bienvenida personalizada
+        preferences = user_profile.get("preferences", {})
+        liked_count = len(preferences.get("liked_foods", []))
+        disliked_count = len(preferences.get("disliked_foods", []))
+        
+        welcome_text = f"""
+✨ **¡Bienvenido de vuelta!** Meal Prep Bot V2.0
 
-Soy tu asistente personal para meal prep con batch cooking. Te ayudo a:
+👤 **Tu perfil:** {user_profile['basic_data']['objetivo_descripcion']}
+🎯 **Personalización:** {liked_count} preferencias, {disliked_count} exclusiones
+🔥 **Calorías objetivo:** {user_profile['macros']['calories']} kcal/día
+⚡ **Available Energy:** {user_profile['energy_data']['available_energy']} kcal/kg FFM/día
 
-📅 Gestionar menús con rotación automática cada 2 semanas
-🧮 Calcular macros personalizados según tu perfil
-🛒 Generar listas de compra categorizadas
-⏰ Crear cronogramas de cocción optimizados
-🤖 Modificar recetas basado en tu feedback
+🚀 **SISTEMA COMPLETAMENTE PERSONALIZADO:**
 
-**Comandos disponibles:**
-/perfil - Crear tu perfil personalizado
-/mis_macros - Ver tus macros calculados
-/menu - Ver menú de la semana actual
-/recetas - Ver todas las recetas
-/buscar consulta - Buscar o crear recetas con IA
+✅ **Menús:** Adaptados a tus gustos y objetivo
+✅ **Recetas IA:** Generadas específicamente para ti  
+✅ **Listas de compra:** Optimizadas para tu perfil
+✅ **Complementos:** Filtrados según preferencias
+✅ **Favoritas:** Sistema de recetas guardadas
 
-🥜 **COMPLEMENTOS MEDITERRÁNEOS:**
-/complementos - Ver alimentos simples naturales
-/nueva_semana - Rotación semanal con complementos
+**COMANDOS PRINCIPALES:**
+🎯 /mis_macros - Tus macros personalizados
+📅 /menu - Menú semanal con tus preferencias
+🛒 /lista_compras - Lista optimizada para ti
+⭐ /favoritas - Tus recetas guardadas
+🤖 /generar - Crear recetas para tu objetivo
+🌟 /valorar_receta - Entrenar IA con ratings
 
-🤖 **GENERACIÓN INTELIGENTE:**
-/generar - Crear recetas por timing nutricional
+**CONFIGURACIÓN:**
+⚙️ /editar_perfil - Modificar preferencias
+📅 /nueva_semana - Configurar cronograma
 
-📊 **GESTIÓN:**
-/compras - Lista de compra con complementos
-/cronograma - Ver cronograma de cocción
-/timing - Ver timing nutricional personalizado
-/rating receta 1-5 comentario - Calificar receta
-/favorito receta - Marcar como favorito
+💡 **Todo se adapta automáticamente a tu perfil nutricional**
+"""
+    else:
+        # Nuevo usuario
+        welcome_text = """
+🍽️ **¡Bienvenido al Meal Prep Bot V2.0!**
 
-También puedes escribirme en lenguaje natural como:
-"No me gusta el cilantro en esta receta"
-"Quiero más recetas con pollo"
+🤖 **Sistema de meal prep con IA completamente personalizado**
 
-¡Empecemos! Usa /menu para ver tu menú actual 👨🍳
+**¿Qué puedo hacer por ti?**
+📊 Calcular macros según tu objetivo específico
+🍽️ Crear menús adaptados a tus preferencias
+🤖 Generar recetas con IA para tu perfil
+🛒 Listas de compra optimizadas automáticamente
+⭐ Sistema de recetas favoritas personalizado
+
+⚠️ **IMPORTANTE:** Para experiencia 100% personalizada:
+
+🆕 **Paso 1:** Usa `/perfil` para configurar tu perfil
+🎯 **Paso 2:** El sistema se adaptará automáticamente a ti
+✨ **Resultado:** Menús, recetas y listas personalizadas
+
+**COMANDOS BÁSICOS (sin personalizar):**
+/perfil - ¡Empieza aquí para personalización completa!
+/menu - Menú genérico
+/recetas - Ver recetas básicas
+/buscar [consulta] - Buscar recetas con IA
+
+💡 **¡Configura tu perfil para experiencia personalizada al 100%!**
 """
     
-    meal_bot.send_long_message(
-        message.chat.id,
-        welcome_text,
-        parse_mode='Markdown',
-        reply_markup=meal_bot.create_main_menu_keyboard()
-    )
+    meal_bot.send_long_message(message.chat.id, welcome_text, parse_mode='Markdown')
 
 @bot.message_handler(commands=['perfil'])
 def perfil_command(message):
@@ -300,9 +349,53 @@ def mis_macros_command(message):
     body_comp = user_profile["body_composition"]
     energy_data = user_profile["energy_data"]
     macros = user_profile["macros"]
+    preferences = user_profile.get("preferences", {})
+    exercise_profile = user_profile.get("exercise_profile", {})
+    
+    # Formatear preferencias alimentarias
+    liked_foods = preferences.get("liked_foods", [])
+    disliked_foods = preferences.get("disliked_foods", [])
+    cooking_methods = preferences.get("cooking_methods", [])
+    
+    # Formatear listas de preferencias con emojis
+    def format_food_list(food_list):
+        if not food_list:
+            return "Ninguna especificada"
+        
+        food_emojis = {
+            "carnes_rojas": "🥩", "aves": "🐔", "pescados": "🐟", "huevos": "🥚",
+            "lacteos": "🥛", "frutos_secos": "🥜", "legumbres": "🫘", "hojas_verdes": "🥬",
+            "cruciferas": "🥦", "solanaceas": "🍅", "aromaticas": "🌿", "raices": "🥕",
+            "pimientos": "🌶️", "pepinaceas": "🥒", "aceitunas": "🫒", "aguacate": "🥑"
+        }
+        
+        formatted = []
+        for food in food_list:
+            emoji = food_emojis.get(food, "🍽️")
+            name = food.replace("_", " ").title()
+            formatted.append(f"{emoji} {name}")
+        
+        return ", ".join(formatted)
+    
+    def format_cooking_methods(methods_list):
+        if not methods_list:
+            return "Ninguno especificado"
+            
+        method_emojis = {
+            "horno": "🔥", "sarten": "🍳", "plancha": "🥘", "vapor": "🫕",
+            "crudo": "🥗", "guisado": "🍲", "parrilla": "🔥", "hervido": "🥄"
+        }
+        
+        formatted = []
+        for method in methods_list:
+            emoji = method_emojis.get(method, "👨‍🍳")
+            name = method.replace("_", " ").title()
+            formatted.append(f"{emoji} {name}")
+        
+        return ", ".join(formatted)
     
     response_text = f"""
-👤 **TU PERFIL NUTRICIONAL**
+👤 **TU PERFIL NUTRICIONAL COMPLETO**
 
 **DATOS BÁSICOS:**
 • Peso: {basic_data['peso']} kg
@@ -328,11 +421,88 @@ def mis_macros_command(message):
 🥑 Grasas: {macros['fat_g']}g ({macros['fat_g']*9} kcal)
 🔥 **TOTAL: {macros['calories']} kcal/día**
 
-**RECOMENDACIÓN:**
+**TUS PREFERENCIAS PERSONALES:**
+🍽️ **Alimentos preferidos:**
+{format_food_list(liked_foods)}
+
+🚫 **Alimentos a evitar:**
+{format_food_list(disliked_foods)}
+
+👨‍🍳 **Métodos de cocción preferidos:**
+{format_cooking_methods(cooking_methods)}
+
+⏰ **Horario de entrenamiento:**
+{exercise_profile.get('training_schedule_desc', 'No especificado')}
+
+**RECOMENDACIÓN PERSONALIZADA:**
 {energy_data['ea_status']['recommendation']}
+
+💡 **Personalización activa:**
+✅ Tus preferencias se aplican en `/buscar` y `/generar`
+✅ Usa `/editar_perfil` para modificar tus preferencias
+✅ Comandos personalizados: `/menu`, `/complementos`
 """
     
     meal_bot.send_long_message(message.chat.id, response_text, parse_mode='Markdown')
+
+@bot.message_handler(commands=['editar_perfil'])
+def editar_perfil_command(message):
+    """Comando para editar preferencias del perfil existente"""
+    telegram_id = str(message.from_user.id)
+    
+    if not meal_bot.create_user_if_not_exists(telegram_id, message):
+        return
+    
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    if not user_profile:
+        bot.send_message(
+            message.chat.id,
+            "❌ No tienes un perfil configurado.\n\n"
+            "Usa `/perfil` para crear tu perfil primero.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Crear teclado de opciones de edición
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    
+    # Botones para cada sección editable
+    markup.add(
+        types.InlineKeyboardButton("🍽️ Alimentos Preferidos", callback_data="edit_liked_foods"),
+        types.InlineKeyboardButton("🚫 Alimentos a Evitar", callback_data="edit_disliked_foods"),
+        types.InlineKeyboardButton("👨‍🍳 Métodos de Cocción", callback_data="edit_cooking_methods"),
+        types.InlineKeyboardButton("⏰ Horario de Entrenamiento", callback_data="edit_training_schedule"),
+        types.InlineKeyboardButton("❌ Cancelar", callback_data="cancel_edit")
+    )
+    
+    # Obtener preferencias actuales
+    preferences = user_profile.get("preferences", {})
+    exercise_profile = user_profile.get("exercise_profile", {})
+    
+    current_preferences = f"""
+📝 **TUS PREFERENCIAS ACTUALES:**
+
+🍽️ **Alimentos preferidos:**
+{', '.join(preferences.get('liked_foods', [])) if preferences.get('liked_foods') else 'Ninguno seleccionado'}
+
+🚫 **Alimentos a evitar:**
+{', '.join(preferences.get('disliked_foods', [])) if preferences.get('disliked_foods') else 'Ninguno seleccionado'}
+
+👨‍🍳 **Métodos de cocción:**
+{', '.join(preferences.get('cooking_methods', [])) if preferences.get('cooking_methods') else 'Ninguno seleccionado'}
+
+⏰ **Horario de entrenamiento:**
+{exercise_profile.get('training_schedule_desc', 'No especificado')}
+
+**¿Qué quieres modificar?**
+"""
+    
+    bot.send_message(
+        message.chat.id,
+        current_preferences,
+        parse_mode='Markdown',
+        reply_markup=markup
+    )
 
 @bot.message_handler(commands=['menu'])
 def menu_command(message):
@@ -382,6 +552,7 @@ def menu_command(message):
 • /generar - Crear recetas por timing
 • /buscar [plato] - Encontrar recetas específicas
 • /nueva_semana - Configurar rotación completa
+• /valorar_receta - Entrenar IA con tus preferencias
 """
         
         meal_bot.send_long_message(message.chat.id, fallback_text, parse_mode='Markdown')
@@ -411,8 +582,10 @@ Para generar recetas personalizadas:
 
 ⚡ **PRE-ENTRENO** (15-30 min antes)
 💪 **POST-ENTRENO** (0-30 min después)  
-🍽️ **COMIDA PRINCIPAL**
-🥜 **SNACK/COMPLEMENTO**
+🌅 **DESAYUNO** - Primera comida del día
+🍽️ **ALMUERZO** - Comida principal del mediodía
+🥜 **MERIENDA** - Snack de la tarde
+🌙 **CENA** - Última comida del día
 
 ¡Genera tu primera receta con /generar!
 """
@@ -423,8 +596,10 @@ Para generar recetas personalizadas:
         categories = {
             "pre_entreno": "⚡ **PRE-ENTRENO**",
             "post_entreno": "💪 **POST-ENTRENO**", 
-            "comida_principal": "🍽️ **COMIDA PRINCIPAL**",
-            "snack_complemento": "🥜 **SNACK/COMPLEMENTO**"
+            "desayuno": "🌅 **DESAYUNO**",
+            "almuerzo": "🍽️ **ALMUERZO**",
+            "merienda": "🥜 **MERIENDA**",
+            "cena": "🌙 **CENA**"
         }
         
         recipes_by_category = {}
@@ -439,7 +614,7 @@ Para generar recetas personalizadas:
                 response_text += f"\n{category_name}\n"
                 for i, recipe in enumerate(recipes_by_category[category][:3], 1):  # Máximo 3 por categoría
                     recipe_data = recipe["recipe_data"]
-                    name = recipe_data.get("name", "Receta sin nombre")
+                    name = recipe_data.get("nombre", "Receta sin nombre")
                     calories = recipe_data.get("macros_per_portion", {}).get("calories", "N/A")
                     score = recipe["validation_score"]
                     date = recipe["generated_date"][:10]  # Solo fecha
@@ -458,20 +633,64 @@ Para generar recetas personalizadas:
 
 @bot.message_handler(commands=['complementos'])
 def complementos_command(message):
-    """Mostrar complementos mediterráneos disponibles"""
+    """Mostrar complementos mediterráneos personalizados según preferencias"""
     telegram_id = str(message.from_user.id)
     
     if not meal_bot.create_user_if_not_exists(telegram_id, message):
         return
     
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    preferences = user_profile.get("preferences", {})
+    exercise_profile = user_profile.get("exercise_profile", {})
+    
+    # Obtener preferencias del usuario
+    liked_foods = preferences.get("liked_foods", [])
+    disliked_foods = preferences.get("disliked_foods", [])
+    training_schedule = exercise_profile.get("training_schedule", "variable")
+    objetivo = user_profile["basic_data"]["objetivo"]
+    
     # Mostrar complementos de la base de datos
     complements = meal_bot.data.get("global_complements", {})
     
-    response_text = "🥜 **COMPLEMENTOS MEDITERRÁNEOS NATURALES**\n\n"
+    response_text = f"🥜 **COMPLEMENTOS MEDITERRÁNEOS PERSONALIZADOS**\n\n"
+    response_text += f"👤 **Adaptado a tu perfil:** {user_profile['basic_data']['objetivo_descripcion']}\n"
+    response_text += f"⏰ **Timing:** {exercise_profile.get('training_schedule_desc', 'Variable')}\n\n"
+    
+    def is_food_preferred(item_name_lower, category_name_lower):
+        """Verificar si un complemento coincide con preferencias del usuario"""
+        
+        # Mapeo de complementos a categorías de alimentos
+        food_mappings = {
+            # Frutos secos
+            "almendras": "frutos_secos", "nueces": "frutos_secos", "pistachos": "frutos_secos",
+            "avellanas": "frutos_secos", "anacardos": "frutos_secos",
+            
+            # Lácteos
+            "yogur": "lacteos", "queso": "lacteos", "feta": "lacteos",
+            
+            # Aceitunas y derivados
+            "aceitunas": "aceitunas", "aceite": "aceitunas",
+            
+            # Frutas
+            "higos": "frutas", "dátiles": "frutas", "pasas": "frutas",
+            
+            # Otros
+            "miel": "endulzantes_naturales"
+        }
+        
+        for word, food_category in food_mappings.items():
+            if word in item_name_lower:
+                return food_category in liked_foods, food_category in disliked_foods
+        
+        return False, False
+    
+    total_shown = 0
+    preferred_items = []
+    neutral_items = []
+    avoided_items = []
     
     for category, items in complements.items():
         category_name = category.replace("_", " ").title()
-        response_text += f"**{category_name.upper()}:**\n"
         
         for item_id, item_data in items.items():
             name = item_data["name"]
@@ -479,18 +698,218 @@ def complementos_command(message):
             unit = item_data["unit"]
             macros = item_data["macros_per_portion"]
             
-            response_text += f"• {name} ({portion}{unit})\n"
-            response_text += f"  {macros['protein']}P / {macros['carbs']}C / {macros['fat']}G = {macros['calories']} kcal\n"
-        
+            # Verificar preferencias
+            is_preferred, is_disliked = is_food_preferred(name.lower(), category.lower())
+            
+            item_text = f"• {name} ({portion}{unit})\n"
+            item_text += f"  {macros['protein']}P / {macros['carbs']}C / {macros['fat']}G = {macros['calories']} kcal"
+            
+            if is_preferred:
+                preferred_items.append((category_name, f"✅ {item_text}"))
+            elif is_disliked:
+                avoided_items.append((category_name, f"⚠️ {item_text}"))
+            else:
+                neutral_items.append((category_name, item_text))
+    
+    # Mostrar complementos preferidos primero
+    if preferred_items:
+        response_text += "⭐ **RECOMENDADOS PARA TI:**\n"
+        current_category = ""
+        for category_name, item_text in preferred_items:
+            if category_name != current_category:
+                response_text += f"\n**{category_name.upper()}:**\n"
+                current_category = category_name
+            response_text += f"{item_text}\n"
         response_text += "\n"
     
-    response_text += """
-**TIMING RECOMENDADO:**
-🌅 **Media mañana:** Frutos secos + frutas
-🌞 **Media tarde:** Lácteos + aceitunas
-🌙 **Noche:** Según macros faltantes
+    # Mostrar complementos neutrales
+    if neutral_items:
+        response_text += "🍽️ **OTROS COMPLEMENTOS DISPONIBLES:**\n"
+        current_category = ""
+        for category_name, item_text in neutral_items[:8]:  # Limitar para no sobrecargar
+            if category_name != current_category:
+                response_text += f"\n**{category_name.upper()}:**\n"
+                current_category = category_name
+            response_text += f"{item_text}\n"
+        response_text += "\n"
+    
+    # Mostrar complementos a evitar (si los hay)
+    if avoided_items:
+        response_text += "🚫 **COMPLEMENTOS QUE EVITAS:**\n"
+        current_category = ""
+        for category_name, item_text in avoided_items:
+            if category_name != current_category:
+                response_text += f"\n**{category_name.upper()}:**\n"
+                current_category = category_name
+            response_text += f"{item_text}\n"
+        response_text += "\n"
+    
+    # Timing personalizado según horario de entrenamiento
+    timing_recommendations = {
+        "mañana": {
+            "pre": "🌅 **Pre-entreno (6:00-6:30):** Miel + almendras",
+            "post": "☀️ **Post-entreno (8:00-9:00):** Yogur griego + nueces",
+            "tarde": "🌆 **Tarde:** Aceitunas + queso feta"
+        },
+        "mediodia": {
+            "pre": "☀️ **Pre-entreno (11:30-12:00):** Dátiles + pistachos",
+            "post": "🌞 **Post-entreno (14:00-15:00):** Yogur + miel",
+            "tarde": "🌆 **Tarde:** Frutos secos mixtos"
+        },
+        "tarde": {
+            "pre": "🌆 **Pre-entreno (15:30-16:00):** Miel + frutos secos",
+            "post": "🌙 **Post-entreno (20:30-21:00):** Yogur + aceitunas",
+            "noche": "🌃 **Noche:** Complementos según macros faltantes"
+        },
+        "noche": {
+            "pre": "🌙 **Pre-entreno (19:30-20:00):** Almendras + miel (ligero)",
+            "post": "🌃 **Post-entreno (22:00-22:30):** Yogur (evitar exceso)",
+            "descanso": "😴 **Antes de dormir:** Solo si faltan macros"
+        },
+        "variable": {
+            "general": "🔄 **Timing flexible:** Adapta según tu horario de entrenamiento",
+            "regla": "📋 **Regla general:** Pre-entreno ligero, post-entreno proteico"
+        }
+    }
+    
+    schedule_recommendations = timing_recommendations.get(training_schedule, timing_recommendations["variable"])
+    
+    response_text += "⏰ **TIMING PERSONALIZADO PARA TI:**\n"
+    for timing_name, recommendation in schedule_recommendations.items():
+        response_text += f"{recommendation}\n"
+    
+    response_text += f"""
 
-**Los complementos se calculan automáticamente para completar tus macros diarios.**
+🎯 **RECOMENDACIONES PARA {objetivo.upper().replace('_', ' ')}:**
+"""
+    
+    # Recomendaciones específicas por objetivo
+    objective_recommendations = {
+        "bajar_peso": [
+            "• Prioriza complementos altos en proteína (yogur griego)",
+            "• Controla porciones de frutos secos (máximo 30g/día)",
+            "• Evita miel en exceso (máximo 15g/día)"
+        ],
+        "subir_masa": [
+            "• Aumenta frecuencia de frutos secos y aceitunas",
+            "• Combina complementos para maximizar calorías",
+            "• Miel post-entreno para reponer glucógeno"
+        ],
+        "recomposicion": [
+            "• Timing preciso: proteínas post-entreno",
+            "• Carbohidratos (miel, frutas) solo peri-entreno",
+            "• Grasas saludables en comidas principales"
+        ],
+        "mantener": [
+            "• Distribución equilibrada durante el día",
+            "• Usa complementos para completar macros faltantes",
+            "• Flexibilidad según apetito y actividad"
+        ]
+    }
+    
+    recs = objective_recommendations.get(objetivo, objective_recommendations["mantener"])
+    for rec in recs:
+        response_text += f"{rec}\n"
+    
+    response_text += f"""
+
+💡 **PERSONALIZACIÓN ACTIVA:**
+✅ Complementos filtrados según tus preferencias
+✅ Timing adaptado a tu horario de entrenamiento
+✅ Recomendaciones específicas para tu objetivo
+✅ Usa `/editar_perfil` para modificar preferencias
+"""
+    
+    meal_bot.send_long_message(message.chat.id, response_text, parse_mode='Markdown')
+
+@bot.message_handler(commands=['favoritas'])
+def favoritas_command(message):
+    """Mostrar recetas favoritas del usuario"""
+    telegram_id = str(message.from_user.id)
+    
+    if not meal_bot.create_user_if_not_exists(telegram_id, message):
+        return
+    
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    favorite_ids = meal_bot.profile_system.get_user_favorites(user_profile)
+    
+    if not favorite_ids:
+        response_text = """
+⭐ **TUS RECETAS FAVORITAS**
+
+❌ **No tienes recetas favoritas aún**
+
+Para añadir recetas a favoritos:
+• Genera recetas con `/generar`
+• Busca recetas con `/buscar [consulta]`
+• Marca las que te gusten con ⭐
+
+**¡Empieza a generar recetas personalizadas!**
+"""
+        bot.send_message(message.chat.id, response_text, parse_mode='Markdown')
+        return
+    
+    # Obtener recetas favoritas de la base de datos
+    generated_recipes = meal_bot.data.get("generated_recipes", [])
+    favorite_recipes = []
+    
+    for recipe_entry in generated_recipes:
+        recipe_id = recipe_entry.get("recipe_id")
+        if recipe_id in favorite_ids:
+            favorite_recipes.append(recipe_entry)
+    
+    if not favorite_recipes:
+        response_text = """
+⭐ **TUS RECETAS FAVORITAS**
+
+⚠️ **Recetas favoritas no encontradas**
+
+Puede que algunas recetas favoritas ya no estén disponibles.
+Genera nuevas recetas con `/generar` y márcalas como favoritas.
+"""
+        bot.send_message(message.chat.id, response_text, parse_mode='Markdown')
+        return
+    
+    # Mostrar recetas favoritas
+    response_text = f"⭐ **TUS RECETAS FAVORITAS**\n\n"
+    response_text += f"📚 **Total:** {len(favorite_recipes)} recetas\n\n"
+    
+    # Agrupar por categoría de timing
+    categories = {
+        "pre_entreno": "⚡ **PRE-ENTRENO**",
+        "post_entreno": "💪 **POST-ENTRENO**", 
+        "comida_principal": "🍽️ **COMIDA PRINCIPAL**",
+        "snack_complemento": "🥜 **SNACK/COMPLEMENTO**"
+    }
+    
+    recipes_by_category = {}
+    for recipe in favorite_recipes:
+        category = recipe.get("timing_category", "comida_principal")
+        if category not in recipes_by_category:
+            recipes_by_category[category] = []
+        recipes_by_category[category].append(recipe)
+    
+    for category, category_name in categories.items():
+        if category in recipes_by_category:
+            response_text += f"\n{category_name}\n"
+            for i, recipe in enumerate(recipes_by_category[category], 1):
+                recipe_data = recipe.get("recipe_data", {})
+                name = recipe_data.get("nombre", "Receta sin nombre")
+                macros = recipe_data.get("macros_per_portion", recipe_data.get("macros_por_porcion", {}))
+                calories = macros.get("calories", macros.get("calorias", "N/A"))
+                score = recipe.get("validation_score", 0)
+                date = recipe.get("generated_date", "")[:10] if recipe.get("generated_date") else "N/A"
+                
+                response_text += f"⭐ **{name}**\n"
+                response_text += f"   {calories} kcal • ⭐{score}/100 • {date}\n\n"
+    
+    response_text += """
+💡 **GESTIÓN DE FAVORITAS:**
+• Usa 🚫 para quitar de favoritos
+• `/generar` para crear más recetas
+• `/buscar [consulta]` para encontrar específicas
+
+**¡Tus favoritas se guardan automáticamente!**
 """
     
     meal_bot.send_long_message(message.chat.id, response_text, parse_mode='Markdown')
@@ -540,9 +959,154 @@ def buscar_command(message):
     # Procesar búsqueda (se implementará completamente en siguiente fase)
     process_ai_search(telegram_id, query, message)
 
+def determine_optimal_theme(user_profile: Dict) -> str:
+    """
+    Determinar tema óptimo basándose en el perfil del usuario
+    """
+    objetivo = user_profile["basic_data"]["objetivo"]
+    available_energy = user_profile["energy_data"]["available_energy"]
+    preferences = user_profile.get("preferences", {})
+    liked_foods = preferences.get("liked_foods", [])
+    
+    # Scoring por objetivo
+    if objetivo == "subir_masa":
+        if available_energy > 50:
+            return "alta_proteina"
+        else:
+            return "energia_sostenida"
+    elif objetivo == "bajar_peso":
+        if "pescados" in liked_foods or "verduras" in liked_foods:
+            return "mediterranea"
+        else:
+            return "detox_natural"
+    elif objetivo == "recomposicion":
+        return "variedad_maxima"  # Balance perfecto
+    else:  # mantener
+        if "frutos_secos" in liked_foods or "aceitunas" in liked_foods:
+            return "mediterranea"
+        else:
+            return "variedad_maxima"
+
+def determine_optimal_cooking_schedule(user_profile: Dict) -> str:
+    """
+    Determinar cronograma óptimo basándose en Available Energy
+    """
+    available_energy = user_profile["energy_data"]["available_energy"]
+    
+    if available_energy >= 60:
+        return "sesion_unica_domingo"  # Máxima eficiencia
+    elif available_energy >= 45:
+        return "dos_sesiones"  # Balance
+    elif available_energy >= 35:
+        return "tres_sesiones"  # Distribuida
+    else:
+        return "preparacion_diaria"  # Mínimo esfuerzo
+
+def generate_intelligent_week(message, user_profile: Dict, theme: str):
+    """
+    Generar plan semanal inteligente con tema específico
+    """
+    try:
+        telegram_id = str(message.from_user.id)
+        
+        # Mostrar mensaje de generación
+        processing_msg = bot.send_message(
+            message.chat.id,
+            "🤖 **Generando plan semanal inteligente...**\n\n"
+            "⚡ Analizando tu perfil nutricional\n"
+            "🎯 Aplicando algoritmos de variedad\n"
+            "🌊 Integrando ingredientes estacionales\n"
+            "📊 Calculando métricas de calidad\n\n"
+            "*Esto puede tomar unos segundos...*",
+            parse_mode='Markdown'
+        )
+        
+        # Preparar preferencias de semana
+        if theme == "auto":
+            # Auto-selección inteligente basada en el perfil del usuario
+            auto_theme = determine_optimal_theme(user_profile)
+            week_preferences = {
+                "theme": auto_theme,
+                "variety_level": 5,  # Máximo nivel de variedad
+                "cooking_schedule": determine_optimal_cooking_schedule(user_profile),
+                "auto_generated": True
+            }
+        else:
+            week_preferences = {
+                "theme": theme,
+                "variety_level": 4,  # Alto nivel de variedad
+                "cooking_schedule": "dos_sesiones"
+            }
+        
+        # Generar plan semanal
+        result = meal_bot.weekly_planner.generate_intelligent_week(
+            user_profile, week_preferences
+        )
+        
+        # Eliminar mensaje de procesamiento
+        bot.delete_message(message.chat.id, processing_msg.message_id)
+        
+        if result["success"]:
+            # Formatear y enviar resultado
+            formatted_plan = meal_bot.weekly_planner.format_weekly_plan_for_telegram(
+                result, user_profile
+            )
+            
+            # Crear botones de acción
+            keyboard = types.InlineKeyboardMarkup(row_width=2)
+            keyboard.add(
+                types.InlineKeyboardButton("🛒 Lista de Compras", callback_data="week_shopping_list"),
+                types.InlineKeyboardButton("🔄 Regenerar Semana", callback_data="week_regenerate")
+            )
+            keyboard.add(
+                types.InlineKeyboardButton("⭐ Guardar Plan", callback_data="week_save"),
+                types.InlineKeyboardButton("📊 Ver Métricas", callback_data="week_metrics")
+            )
+            
+            meal_bot.send_long_message(
+                message.chat.id, 
+                formatted_plan, 
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+            
+            # Guardar plan en el perfil del usuario
+            if "current_week_plan" not in user_profile:
+                user_profile["current_week_plan"] = {}
+            
+            user_profile["current_week_plan"] = {
+                "plan_data": result,
+                "generated_at": datetime.now().isoformat(),
+                "theme_used": theme
+            }
+            meal_bot.save_user_profile(telegram_id, user_profile)
+            
+        else:
+            error_message = f"""
+❌ **Error generando plan semanal**
+
+**Error:** {result.get('error', 'Error desconocido')}
+
+🔄 **Soluciones:**
+• Intenta con otro tema semanal
+• Verifica que tu perfil esté completo
+• Usa `/help` si el problema persiste
+
+**Puedes intentar de nuevo con `/nueva_semana`**
+"""
+            bot.send_message(message.chat.id, error_message, parse_mode='Markdown')
+            
+    except Exception as e:
+        logger.error(f"Error generating intelligent week: {e}")
+        bot.send_message(
+            message.chat.id,
+            f"❌ **Error interno:** {str(e)}\n\nIntenta de nuevo con `/nueva_semana`",
+            parse_mode='Markdown'
+        )
+
 @bot.message_handler(commands=['nueva_semana'])
 def nueva_semana_command(message):
-    """Configurar nueva semana con cronograma"""
+    """Generar plan semanal inteligente"""
     telegram_id = str(message.from_user.id)
     
     if not meal_bot.create_user_if_not_exists(telegram_id, message):
@@ -550,42 +1114,99 @@ def nueva_semana_command(message):
     
     user_profile = meal_bot.get_user_profile(telegram_id)
     
-    # Mostrar opciones de cronograma  
+    # Extraer argumentos del comando (tema opcional)
+    command_parts = message.text.split()
+    requested_theme = command_parts[1] if len(command_parts) > 1 else None
+    
+    # Crear teclado inline para selección de tema
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    
+    # Botones de temas disponibles
+    keyboard.add(
+        types.InlineKeyboardButton("🌊 Mediterránea", callback_data="theme_mediterranea"),
+        types.InlineKeyboardButton("💪 Alta Proteína", callback_data="theme_alta_proteina")
+    )
+    keyboard.add(
+        types.InlineKeyboardButton("🌿 Detox Natural", callback_data="theme_detox_natural"),
+        types.InlineKeyboardButton("⚡ Energía Sostenida", callback_data="theme_energia_sostenida")
+    )
+    keyboard.add(
+        types.InlineKeyboardButton("🌈 Variedad Máxima", callback_data="theme_variedad_maxima")
+    )
+    keyboard.add(
+        types.InlineKeyboardButton("🎯 Auto-selección IA", callback_data="theme_auto")
+    )
+    
+    # Si se especificó tema, generar directamente
+    if requested_theme and requested_theme in ['mediterranea', 'alta_proteina', 'detox_natural', 'energia_sostenida', 'variedad_maxima']:
+        generate_intelligent_week(message, user_profile, requested_theme)
+        return
+    
+    # Mostrar opciones de tema
     response_text = f"""
-📅 **CONFIGURAR NUEVA SEMANA**
+🗓️ **PLANIFICACIÓN SEMANAL INTELIGENTE**
 
 👤 **Tu perfil:** {user_profile['basic_data']['objetivo_descripcion']}
-🔥 **Calorías objetivo:** {user_profile['macros']['calories']} kcal/día
+🔥 **Calorías diarias:** {user_profile['macros']['calories']} kcal
+⚡ **Available Energy:** {user_profile['energy_data']['available_energy']} kcal/kg FFM
 
-🕐 **OPCIONES DE CRONOGRAMA SEMANAL:**
+🎨 **TEMAS SEMANALES DISPONIBLES:**
 
-⭐ **RECOMENDADO para tu perfil:**
-🅰️ **Sesión única domingo** (4-6 horas)
-   • Máxima eficiencia meal prep
-   • Todo listo para la semana
-   • Tiempo estimado: 4-6 horas
+🌊 **Mediterránea** - Ingredientes tradicionales mediterráneos
+💪 **Alta Proteína** - Maximizar síntesis proteica y recuperación  
+🌿 **Detox Natural** - Alimentos depurativos y antioxidantes
+⚡ **Energía Sostenida** - Carbohidratos complejos y grasas saludables
+🌈 **Variedad Máxima** - Máxima diversidad de ingredientes
 
-🅱️ **Dos sesiones: Dom + Miér** (2-3 horas c/u)
-   • Balance eficiencia/frescura
-   • Comidas más frescas
-   • Tiempo total: 4-6 horas
+🎯 **Auto-selección IA** - Deja que la IA elija el tema óptimo para ti
 
-🅲️ **Tres sesiones: Dom/Mar/Vie** (1.5-2 horas c/u)
-   • Máxima frescura
-   • Carga distribuida
-   • Tiempo total: 4.5-6 horas
+**Selecciona un tema para generar tu plan semanal inteligente:**
+"""
+    
+    bot.send_message(
+        message.chat.id,
+        response_text,
+        reply_markup=keyboard,
+        parse_mode='Markdown'
+    )
 
-🅳️ **Preparación diaria** (20-30 min/día)
-   • Comida siempre fresca  
-   • Sin meal prep masivo
-   • Tiempo diario: 20-30 min
+@bot.message_handler(commands=['lista_compras'])
+def lista_compras_command(message):
+    """Generar lista de compras personalizada automática"""
+    telegram_id = str(message.from_user.id)
+    
+    if not meal_bot.create_user_if_not_exists(telegram_id, message):
+        return
+    
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    # Mostrar opciones de duración
+    response_text = f"""
+🛒 **LISTA DE COMPRAS PERSONALIZADA**
 
-**Responde con la letra de tu opción preferida (A, B, C, D)**
+👤 **Tu perfil:** {user_profile['basic_data']['objetivo_descripcion']}
+🔥 **Calorías diarias:** {user_profile['macros']['calories']} kcal
+
+📅 **¿Para cuántos días quieres la lista?**
+
+🅰️ **3 días** - Lista compacta para meal prep corto
+🅱️ **5 días** - Lista estándar para semana laboral
+🅲️ **7 días** - Lista completa para toda la semana
+🅳️ **10 días** - Lista extendida para compra quincenal
+
+**Responde con la letra de tu opción (A, B, C, D)**
+
+✨ **La lista se adapta automáticamente a:**
+• Tus alimentos preferidos (cantidades aumentadas)
+• Alimentos que evitas (excluidos automáticamente)
+• Tu objetivo nutricional específico
+• Complementos mediterráneos optimizados
+• Distribución inteligente por frescura
 """
     
     meal_bot.user_states[telegram_id] = {
-        "state": "schedule_setup",
-        "step": "choose_schedule"
+        "state": "shopping_list_setup",
+        "step": "choose_days"
     }
     
     meal_bot.send_long_message(message.chat.id, response_text, parse_mode='Markdown')
@@ -607,8 +1228,12 @@ def generar_command(message):
         types.InlineKeyboardButton("💪 Post-entreno", callback_data="gen_post_entreno")
     )
     keyboard.add(
-        types.InlineKeyboardButton("🍽️ Comida principal", callback_data="gen_comida_principal"),
-        types.InlineKeyboardButton("🥜 Snack/Complemento", callback_data="gen_snack")
+        types.InlineKeyboardButton("🌅 Desayuno", callback_data="gen_desayuno"),
+        types.InlineKeyboardButton("🍽️ Almuerzo", callback_data="gen_almuerzo")
+    )
+    keyboard.add(
+        types.InlineKeyboardButton("🥜 Merienda", callback_data="gen_merienda"),
+        types.InlineKeyboardButton("🌙 Cena", callback_data="gen_cena")
     )
     
     bot.send_message(
@@ -617,12 +1242,1404 @@ def generar_command(message):
         "Selecciona el tipo de receta que quieres generar según tu timing nutricional:\n\n"
         "⚡ **Pre-entreno:** Energía rápida (15-30 min antes)\n"
         "💪 **Post-entreno:** Recuperación muscular (0-30 min después)\n"
-        "🍽️ **Comida principal:** Nutrición balanceada general\n"
-        "🥜 **Snack:** Complemento para ajustar macros\n\n"
+        "🌅 **Desayuno:** Primera comida del día\n"
+        "🍽️ **Almuerzo:** Comida principal del mediodía\n"
+        "🥜 **Merienda:** Snack de la tarde\n"
+        "🌙 **Cena:** Última comida del día\n\n"
         "**La receta se adaptará automáticamente a tu perfil nutricional.**",
         parse_mode='Markdown',
         reply_markup=keyboard
     )
+
+@bot.message_handler(commands=['valorar_receta'])
+def valorar_receta_command(message):
+    """Valorar receta para mejorar IA"""
+    telegram_id = str(message.from_user.id)
+    
+    if not meal_bot.create_user_if_not_exists(telegram_id, message):
+        return
+    
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    # Verificar si hay recetas recientes generadas
+    recent_recipes = user_profile.get("recent_generated_recipes", [])
+    
+    if not recent_recipes:
+        no_recipes_text = """
+⭐ **VALORAR RECETAS - SISTEMA DE APRENDIZAJE IA**
+
+❌ **No hay recetas recientes para valorar**
+
+Para poder valorar recetas necesitas:
+1. 🤖 Generar recetas con `/generar`
+2. 🔍 Buscar recetas con `/buscar [consulta]`
+3. 📅 Crear plan semanal con `/nueva_semana`
+
+💡 **¿Por qué valorar recetas?**
+• La IA aprende tus preferencias automáticamente
+• Mejoran las recomendaciones personalizadas
+• El sistema se adapta a tu gusto específico
+• Planes semanales más precisos
+
+🚀 **Genera tu primera receta:**
+"""
+        
+        # Crear botones para generar receta
+        keyboard = types.InlineKeyboardMarkup(row_width=2)
+        keyboard.add(
+            types.InlineKeyboardButton("🤖 Generar Receta", callback_data="gen_comida_principal"),
+            types.InlineKeyboardButton("📅 Plan Semanal", callback_data="theme_auto")
+        )
+        
+        bot.send_message(
+            message.chat.id,
+            no_recipes_text,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        return
+    
+    # Mostrar recetas disponibles para valorar
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    
+    response_text = f"""
+⭐ **VALORAR RECETAS - APRENDER PREFERENCIAS**
+
+👤 **Tu perfil:** {user_profile['basic_data']['objetivo_descripcion']}
+🧠 **IA Score:** {meal_bot.recipe_intelligence._calculate_intelligence_score(user_profile.get('recipe_intelligence', {}))} /100
+
+📋 **RECETAS DISPONIBLES PARA VALORAR:**
+
+"""
+    
+    # Mostrar hasta 5 recetas más recientes
+    for i, recipe in enumerate(recent_recipes[-5:]):
+        recipe_name = recipe.get("nombre", f"Receta {i+1}")
+        recipe_timing = recipe.get("categoria_timing", "general")
+        calories = recipe.get("macros_por_porcion", {}).get("calorias", 0)
+        
+        response_text += f"**{i+1}.** {recipe_name}\n"
+        response_text += f"   🎯 {recipe_timing.replace('_', ' ').title()} • {calories} kcal\n\n"
+        
+        # Botón para valorar esta receta específica
+        keyboard.add(
+            types.InlineKeyboardButton(
+                f"⭐ Valorar: {recipe_name[:25]}{'...' if len(recipe_name) > 25 else ''}",
+                callback_data=f"rate_recipe_{i}"
+            )
+        )
+    
+    # Botón para ver reporte de inteligencia
+    keyboard.add(
+        types.InlineKeyboardButton("🧠 Ver Reporte de IA", callback_data="show_intelligence_report")
+    )
+    
+    response_text += """
+💡 **ESCALA DE VALORACIÓN:**
+⭐ = Muy malo (la IA evitará ingredientes/estilos similares)
+⭐⭐ = Malo (reduce recomendaciones similares)  
+⭐⭐⭐ = Neutro (sin cambios en preferencias)
+⭐⭐⭐⭐ = Bueno (aumenta recomendaciones similares)
+⭐⭐⭐⭐⭐ = Excelente (prioriza ingredientes/estilos similares)
+
+**¡Cada valoración mejora automáticamente tus recomendaciones futuras!**
+"""
+    
+    meal_bot.send_long_message(
+        message.chat.id,
+        response_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+@bot.message_handler(commands=['progreso'])
+def progreso_command(message):
+    """Seguimiento de progreso y métricas del usuario"""
+    telegram_id = str(message.from_user.id)
+    
+    if not meal_bot.create_user_if_not_exists(telegram_id, message):
+        return
+    
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    # Verificar si tiene datos de tracking
+    tracking_data = user_profile.get("progress_tracking", {})
+    has_data = tracking_data and tracking_data.get("metrics")
+    
+    if has_data:
+        # Mostrar opciones de progreso
+        keyboard = types.InlineKeyboardMarkup(row_width=2)
+        keyboard.add(
+            types.InlineKeyboardButton("📊 Ver Reporte", callback_data="progress_report"),
+            types.InlineKeyboardButton("📈 Registrar Métrica", callback_data="progress_record")
+        )
+        keyboard.add(
+            types.InlineKeyboardButton("📅 Reporte Semanal", callback_data="progress_week"),
+            types.InlineKeyboardButton("📆 Reporte Mensual", callback_data="progress_month")
+        )
+        keyboard.add(
+            types.InlineKeyboardButton("🎯 Configurar Objetivos", callback_data="progress_goals")
+        )
+        
+        # Obtener métricas básicas
+        total_metrics = len(tracking_data.get("metrics", {}))
+        total_records = sum(len(records) for records in tracking_data.get("metrics", {}).values())
+        
+        # Última métrica registrada
+        last_record_date = "Nunca"
+        for metric_records in tracking_data.get("metrics", {}).values():
+            if metric_records:
+                last_date = datetime.fromisoformat(metric_records[-1]["timestamp"])
+                if last_record_date == "Nunca" or last_date > datetime.fromisoformat(last_record_date):
+                    last_record_date = last_date.strftime("%d/%m/%Y")
+        
+        progress_text = f"""
+📊 **SEGUIMIENTO DE PROGRESO**
+
+👤 **Tu perfil:** {user_profile['basic_data']['objetivo_descripcion']}
+🎯 **Objetivo:** {user_profile['basic_data']['objetivo'].replace('_', ' ').title()}
+
+📈 **ESTADÍSTICAS DE TRACKING:**
+• Métricas registradas: {total_metrics} tipos
+• Total de registros: {total_records}
+• Último registro: {last_record_date}
+
+**¿Qué quieres hacer?**
+"""
+        
+        bot.send_message(
+            message.chat.id,
+            progress_text,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+    
+    else:
+        # Primera vez - introducir el sistema
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
+        keyboard.add(
+            types.InlineKeyboardButton("📈 Registrar Primera Métrica", callback_data="progress_record"),
+            types.InlineKeyboardButton("❓ ¿Cómo Funciona?", callback_data="progress_help")
+        )
+        
+        intro_text = f"""
+📊 **SISTEMA DE SEGUIMIENTO DE PROGRESO**
+
+👤 **Tu objetivo:** {user_profile['basic_data']['objetivo_descripcion']}
+
+🎯 **¿QUÉ PUEDES TRACKEAR?**
+⚖️ Peso corporal
+📊 Porcentaje de grasa
+💪 Masa muscular  
+📏 Circunferencia de cintura
+⚡ Nivel de energía
+💤 Calidad de sueño
+🔄 Recuperación post-entreno
+🍽️ Control del apetito
+
+💡 **BENEFICIOS DEL TRACKING:**
+• Análisis automático de tendencias
+• Insights personalizados con IA
+• Recomendaciones adaptativas
+• Detección de patrones
+• Ajustes automáticos del plan
+
+🚀 **COMIENZA AHORA:**
+**Registra tu primera métrica para activar el sistema inteligente de seguimiento.**
+"""
+        
+        bot.send_message(
+            message.chat.id,
+            intro_text,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+
+@bot.message_handler(commands=['planificar_semana'])
+def planificar_semana_command(message):
+    """Generar cronograma optimizado de meal prep personalizado"""
+    telegram_id = str(message.from_user.id)
+    
+    if not meal_bot.create_user_if_not_exists(telegram_id, message):
+        return
+    
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    # Extraer parámetros del comando (opcional)
+    args = message.text.split()[1:] if len(message.text.split()) > 1 else []
+    
+    # Configurar preferencias por defecto
+    default_preferences = {
+        "max_prep_time_hours": 6,
+        "preferred_prep_days": ["domingo"],
+        "max_session_hours": 4,
+        "cooking_experience": "intermedio",
+        "freshness_priority": 7,
+        "time_efficiency_priority": 8,
+        "storage_capacity": "medio",
+        "kitchen_equipment": ["basico"]
+    }
+    
+    # Si hay argumentos, permitir personalización rápida
+    if args:
+        if "rapido" in args:
+            default_preferences["time_efficiency_priority"] = 10
+            default_preferences["max_prep_time_hours"] = 4
+        elif "fresco" in args:
+            default_preferences["freshness_priority"] = 10
+            default_preferences["preferred_prep_days"] = ["domingo", "miercoles"]
+        elif "simple" in args:
+            default_preferences["cooking_experience"] = "principiante"
+            default_preferences["max_session_hours"] = 2
+    
+    # Mostrar mensaje de procesamiento
+    processing_msg = bot.send_message(
+        message.chat.id,
+        "🗓️ **GENERANDO CRONOGRAMA OPTIMIZADO...**\n\n"
+        "⚙️ Analizando tu perfil y restricciones\n"
+        "📊 Calculando carga de trabajo total\n"
+        "🎯 Optimizando distribución temporal\n"
+        "📈 Aplicando algoritmos de eficiencia\n\n"
+        "*Esto puede tomar unos segundos...*",
+        parse_mode='Markdown'
+    )
+    
+    try:
+        # Generar cronograma optimizado
+        result = meal_bot.meal_prep_scheduler.generate_optimized_schedule(
+            user_profile, default_preferences
+        )
+        
+        # Eliminar mensaje de procesamiento
+        bot.delete_message(message.chat.id, processing_msg.message_id)
+        
+        if result["success"]:
+            # Formatear y enviar cronograma
+            formatted_schedule = meal_bot.meal_prep_scheduler.format_schedule_for_telegram(
+                result, user_profile
+            )
+            
+            meal_bot.send_long_message(
+                message.chat.id,
+                formatted_schedule,
+                parse_mode='Markdown'
+            )
+            
+            # Botones de acciones rápidas
+            keyboard = types.InlineKeyboardMarkup(row_width=2)
+            keyboard.add(
+                types.InlineKeyboardButton("📋 Lista de Compras", callback_data="generate_shopping_list"),
+                types.InlineKeyboardButton("🗓️ Nuevo Cronograma", callback_data="new_schedule")
+            )
+            keyboard.add(
+                types.InlineKeyboardButton("⚙️ Personalizar", callback_data="customize_schedule"),
+                types.InlineKeyboardButton("📊 Ver Eficiencia", callback_data="schedule_metrics")
+            )
+            
+            bot.send_message(
+                message.chat.id,
+                "🎯 **¿Qué quieres hacer con tu cronograma?**",
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+            
+        else:
+            error_msg = result.get("error", "Error desconocido")
+            bot.send_message(
+                message.chat.id,
+                f"❌ **Error generando cronograma:**\n{error_msg}\n\n"
+                "💡 **Intenta:**\n"
+                "• Usar `/planificar_semana` de nuevo\n"
+                "• Verificar que tu perfil esté completo con `/mis_macros`\n"
+                "• Usar argumentos: `/planificar_semana rapido` o `/planificar_semana fresco`",
+                parse_mode='Markdown'
+            )
+    
+    except Exception as e:
+        # Eliminar mensaje de procesamiento si existe
+        try:
+            bot.delete_message(message.chat.id, processing_msg.message_id)
+        except:
+            pass
+        
+        logger.error(f"Error in planificar_semana_command: {e}")
+        bot.send_message(
+            message.chat.id,
+            f"❌ **Error procesando cronograma:**\n{str(e)}\n\n"
+            "💡 **Soluciones:**\n"
+            "• Intenta de nuevo en unos momentos\n"
+            "• Verifica que tu perfil esté completo\n"
+            "• Usa `/perfil` si es tu primera vez\n"
+            "• Contacta soporte si persiste el error",
+            parse_mode='Markdown'
+        )
+
+@bot.message_handler(commands=['analisis_nutricional'])
+def analisis_nutricional_command(message):
+    """Generar análisis nutricional profundo con IA avanzada"""
+    telegram_id = str(message.from_user.id)
+    
+    if not meal_bot.create_user_if_not_exists(telegram_id, message):
+        return
+    
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    # Extraer período del comando (opcional)
+    args = message.text.split()[1:]
+    period = "month"  # Default
+    
+    if args:
+        if "semana" in args[0].lower() or "week" in args[0].lower():
+            period = "week"
+        elif "trimestre" in args[0].lower() or "quarter" in args[0].lower():
+            period = "quarter"
+        elif "mes" in args[0].lower() or "month" in args[0].lower():
+            period = "month"
+    
+    # Verificar datos suficientes
+    progress_data = user_profile.get("progress_tracking", {})
+    recipe_intelligence = user_profile.get("recipe_intelligence", {})
+    
+    has_progress_data = progress_data and progress_data.get("metrics")
+    has_recipe_data = recipe_intelligence and recipe_intelligence.get("ratings_history")
+    
+    if not has_progress_data and not has_recipe_data:
+        # Usuario sin datos - mostrar introducción
+        intro_text = f"""
+🧬 **ANÁLISIS NUTRICIONAL PROFUNDO CON IA**
+
+👤 **Tu perfil:** {user_profile['basic_data']['objetivo_descripcion']}
+
+❌ **DATOS INSUFICIENTES PARA ANÁLISIS COMPLETO**
+
+🎯 **PARA DESBLOQUEAR ANÁLISIS PROFUNDO NECESITAS:**
+
+📊 **DATOS DE PROGRESO:**
+• Registra métricas con `/progreso`
+• Mínimo: peso, energía, sueño (1 semana)
+• Recomendado: 4+ métricas (2+ semanas)
+
+⭐ **DATOS DE PREFERENCIAS:**
+• Valora recetas con `/valorar_receta`
+• Mínimo: 3 valoraciones
+• Recomendado: 10+ valoraciones variadas
+
+🔬 **EL ANÁLISIS INCLUIRÁ:**
+• **Distribución de macronutrientes** - Adherencia vs objetivo
+• **Estado de micronutrientes** - Deficiencias y fortalezas
+• **Patrones de adherencia** - Consistencia y factores
+• **Timing nutricional** - Optimización per objetivos
+• **Variedad alimentaria** - Diversidad y monotonía
+• **Correlaciones con progreso** - Qué funciona para ti
+• **Puntuación nutricional global** - Score 0-100
+• **Recomendaciones personalizadas** - IA adaptada
+
+🚀 **PASOS PARA ACTIVAR:**
+1. Usa `/progreso` para registrar primera métrica
+2. Usa `/valorar_receta` para entrenar IA
+3. Regresa en 3-7 días para análisis completo
+
+💡 **ANÁLISIS DISPONIBLES:**
+• `/analisis_nutricional semana` - Análisis semanal
+• `/analisis_nutricional mes` - Análisis mensual (recomendado)
+• `/analisis_nutricional trimestre` - Análisis de tendencias
+
+**¡El análisis más avanzado se desbloquea con más datos!**
+"""
+        
+        keyboard = types.InlineKeyboardMarkup(row_width=2)
+        keyboard.add(
+            types.InlineKeyboardButton("📊 Registrar Métrica", callback_data="progress_record"),
+            types.InlineKeyboardButton("⭐ Valorar Recetas", callback_data="start_rating")
+        )
+        keyboard.add(
+            types.InlineKeyboardButton("❓ ¿Cómo Funciona?", callback_data="analytics_help")
+        )
+        
+        meal_bot.send_long_message(
+            message.chat.id,
+            intro_text,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        return
+    
+    # Usuario con datos - generar análisis
+    period_names = {"week": "semanal", "month": "mensual", "quarter": "trimestral"}
+    period_display = period_names.get(period, "mensual")
+    
+    # Mostrar mensaje de procesamiento
+    processing_msg = bot.send_message(
+        message.chat.id,
+        f"🧬 **GENERANDO ANÁLISIS NUTRICIONAL {period_display.upper()}...**\n\n"
+        "🔬 Analizando distribución de macronutrientes\n"
+        "⚗️ Evaluando estado de micronutrientes\n"
+        "📊 Calculando adherencia al plan\n"
+        "⏰ Optimizando timing nutricional\n"
+        "🌈 Analizando variedad alimentaria\n"
+        "🔗 Detectando correlaciones con progreso\n"
+        "🎯 Generando puntuación global\n"
+        "💡 Creando recomendaciones con IA\n\n"
+        "*Análisis profundo en proceso...*",
+        parse_mode='Markdown'
+    )
+    
+    try:
+        # Generar análisis completo
+        result = meal_bot.nutrition_analytics.generate_comprehensive_analysis(
+            user_profile, period
+        )
+        
+        # Eliminar mensaje de procesamiento
+        bot.delete_message(message.chat.id, processing_msg.message_id)
+        
+        if result["success"]:
+            # Formatear y enviar análisis
+            formatted_analysis = meal_bot.nutrition_analytics.format_analysis_for_telegram(
+                result, user_profile
+            )
+            
+            meal_bot.send_long_message(
+                message.chat.id,
+                formatted_analysis,
+                parse_mode='Markdown'
+            )
+            
+            # Botones de acciones basadas en análisis
+            keyboard = types.InlineKeyboardMarkup(row_width=2)
+            
+            # Acciones basadas en puntuación
+            overall_score = result["nutrition_score"]["overall_score"]
+            
+            if overall_score < 70:
+                keyboard.add(
+                    types.InlineKeyboardButton("🎯 Plan de Mejora", callback_data="create_improvement_plan"),
+                    types.InlineKeyboardButton("📋 Lista Optimizada", callback_data="generate_shopping_list")
+                )
+            else:
+                keyboard.add(
+                    types.InlineKeyboardButton("🔬 Análisis Avanzado", callback_data="advanced_analytics"),
+                    types.InlineKeyboardButton("📊 Exportar Datos", callback_data="export_analytics")
+                )
+            
+            keyboard.add(
+                types.InlineKeyboardButton("🆕 Nuevo Análisis", callback_data="new_nutrition_analysis"),
+                types.InlineKeyboardButton("📈 Ver Progreso", callback_data="progress_report")
+            )
+            
+            bot.send_message(
+                message.chat.id,
+                f"🎯 **Análisis completado - Score: {overall_score:.1f}/100**\n\n"
+                "**¿Qué quieres hacer con estos insights?**",
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+            
+        else:
+            error_msg = result.get("error", "Error desconocido")
+            suggestions = result.get("suggestions", [])
+            
+            error_text = f"❌ **Error en análisis nutricional:**\n{error_msg}\n\n"
+            
+            if suggestions:
+                error_text += "💡 **Sugerencias:**\n"
+                for suggestion in suggestions:
+                    error_text += f"• {suggestion}\n"
+                error_text += "\n"
+            
+            error_text += "🔄 **Intenta:**\n"
+            error_text += "• Registrar más métricas con `/progreso`\n"
+            error_text += "• Valorar más recetas con `/valorar_receta`\n"
+            error_text += "• Usar período más corto: `/analisis_nutricional semana`\n"
+            error_text += "• Esperar unos días y repetir el análisis"
+            
+            bot.send_message(
+                message.chat.id,
+                error_text,
+                parse_mode='Markdown'
+            )
+    
+    except Exception as e:
+        # Eliminar mensaje de procesamiento si existe
+        try:
+            bot.delete_message(message.chat.id, processing_msg.message_id)
+        except:
+            pass
+        
+        logger.error(f"Error in analisis_nutricional_command: {e}")
+        bot.send_message(
+            message.chat.id,
+            f"❌ **Error procesando análisis nutricional:**\n{str(e)}\n\n"
+            "💡 **Soluciones:**\n"
+            "• Verifica que tengas datos de progreso registrados\n"
+            "• Intenta análisis semanal: `/analisis_nutricional semana`\n"
+            "• Contacta soporte si el error persiste\n"
+            "• Usa `/progreso` para registrar más datos",
+            parse_mode='Markdown'
+        )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('theme_'))
+def handle_theme_selection_callback(call):
+    """Manejar callbacks de selección de tema semanal"""
+    telegram_id = str(call.from_user.id)
+    
+    try:
+        # Extraer tema seleccionado
+        theme_key = call.data.replace('theme_', '')
+        
+        user_profile = meal_bot.get_user_profile(telegram_id)
+        if not user_profile:
+            bot.answer_callback_query(call.id, "❌ Error: Perfil no encontrado")
+            return
+        
+        # Confirmar selección
+        theme_names = {
+            "mediterranea": "🌊 Mediterránea",
+            "alta_proteina": "💪 Alta Proteína", 
+            "detox_natural": "🌿 Detox Natural",
+            "energia_sostenida": "⚡ Energía Sostenida",
+            "variedad_maxima": "🌈 Variedad Máxima",
+            "auto": "🎯 Auto-selección IA"
+        }
+        
+        selected_theme_name = theme_names.get(theme_key, "Tema desconocido")
+        
+        bot.answer_callback_query(
+            call.id, 
+            f"✅ Generando plan {selected_theme_name}..."
+        )
+        
+        # Crear mensaje simulado para la función helper
+        class MockMessage:
+            def __init__(self, chat_id):
+                self.chat = type('obj', (object,), {'id': chat_id})
+        
+        mock_message = MockMessage(call.message.chat.id)
+        
+        # Generar plan semanal inteligente
+        generate_intelligent_week(mock_message, user_profile, theme_key)
+        
+    except Exception as e:
+        logger.error(f"Error in theme selection callback: {e}")
+        bot.answer_callback_query(call.id, "❌ Error procesando selección")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('week_'))
+def handle_week_actions_callback(call):
+    """Manejar callbacks de acciones del plan semanal"""
+    telegram_id = str(call.from_user.id)
+    
+    try:
+        action = call.data.replace('week_', '')
+        user_profile = meal_bot.get_user_profile(telegram_id)
+        
+        if not user_profile:
+            bot.answer_callback_query(call.id, "❌ Error: Perfil no encontrado")
+            return
+        
+        current_plan = user_profile.get("current_week_plan")
+        if not current_plan:
+            bot.answer_callback_query(call.id, "❌ No hay plan activo")
+            return
+        
+        if action == "shopping_list":
+            # Generar lista de compras para el plan actual
+            shopping_result = meal_bot.shopping_generator.generate_shopping_list(
+                user_profile, days=5
+            )
+            
+            if shopping_result["success"]:
+                formatted_list = meal_bot.shopping_generator.format_shopping_list_for_telegram(
+                    shopping_result, user_profile
+                )
+                meal_bot.send_long_message(
+                    call.message.chat.id,
+                    formatted_list,
+                    parse_mode='Markdown'
+                )
+                bot.answer_callback_query(call.id, "✅ Lista generada")
+            else:
+                bot.answer_callback_query(call.id, "❌ Error generando lista")
+        
+        elif action == "regenerate":
+            # Regenerar plan con el mismo tema
+            theme_used = current_plan.get("theme_used", "auto")
+            
+            class MockMessage:
+                def __init__(self, chat_id):
+                    self.chat = type('obj', (object,), {'id': chat_id})
+            
+            mock_message = MockMessage(call.message.chat.id)
+            generate_intelligent_week(mock_message, user_profile, theme_used)
+            bot.answer_callback_query(call.id, "🔄 Regenerando plan...")
+        
+        elif action == "save":
+            # Guardar plan en favoritos
+            if "saved_weekly_plans" not in user_profile:
+                user_profile["saved_weekly_plans"] = []
+            
+            # Agregar timestamp al plan guardado
+            saved_plan = current_plan.copy()
+            saved_plan["saved_at"] = datetime.now().isoformat() 
+            saved_plan["plan_name"] = f"Plan {saved_plan['theme_used'].title()} - {datetime.now().strftime('%d/%m')}"
+            
+            user_profile["saved_weekly_plans"].append(saved_plan)
+            
+            # Mantener solo los últimos 10 planes guardados
+            if len(user_profile["saved_weekly_plans"]) > 10:
+                user_profile["saved_weekly_plans"] = user_profile["saved_weekly_plans"][-10:]
+            
+            meal_bot.save_user_profile(telegram_id, user_profile)
+            bot.answer_callback_query(call.id, "⭐ Plan guardado en favoritos")
+        
+        elif action == "metrics":
+            # Mostrar métricas detalladas del plan
+            plan_data = current_plan["plan_data"]
+            quality_metrics = plan_data["quality_metrics"]
+            
+            metrics_text = f"""
+📊 **MÉTRICAS DETALLADAS DEL PLAN**
+
+🎯 **Puntuación General:** {quality_metrics['overall_score']}/100
+
+📈 **Análisis de Variedad:**
+• Puntuación variedad: {quality_metrics['variety_score']}/5.0
+• Diversidad ingredientes: {quality_metrics['ingredient_diversity']} tipos únicos
+• Métodos de cocción: {quality_metrics['method_diversity']} diferentes
+
+🌊 **Integración Temática:**
+• Tema aplicado: {quality_metrics['theme_consistency']}
+• Comidas estacionales: {quality_metrics['seasonal_integration']}
+
+⭐ **Evaluación:**
+"""
+            
+            # Añadir evaluación cualitativa
+            if quality_metrics['overall_score'] >= 80:
+                metrics_text += "✅ **Excelente** - Plan óptimo con alta variedad\n"
+            elif quality_metrics['overall_score'] >= 60:
+                metrics_text += "🟡 **Bueno** - Plan sólido con variedad aceptable\n"  
+            else:
+                metrics_text += "🔄 **Mejorable** - Considera regenerar el plan\n"
+            
+            metrics_text += f"\n💡 **Generado:** {datetime.fromisoformat(current_plan['generated_at']).strftime('%d/%m/%Y %H:%M')}"
+            
+            bot.send_message(
+                call.message.chat.id,
+                metrics_text,
+                parse_mode='Markdown'
+            )
+            bot.answer_callback_query(call.id, "📊 Métricas mostradas")
+        
+    except Exception as e:
+        logger.error(f"Error in week actions callback: {e}")
+        bot.answer_callback_query(call.id, "❌ Error procesando acción")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('rate_recipe_'))
+def handle_rate_recipe_callback(call):
+    """Manejar callbacks de selección de receta para valorar"""
+    telegram_id = str(call.from_user.id)
+    
+    try:
+        # Extraer índice de receta
+        recipe_index = int(call.data.replace('rate_recipe_', ''))
+        
+        user_profile = meal_bot.get_user_profile(telegram_id)
+        if not user_profile:
+            bot.answer_callback_query(call.id, "❌ Error: Perfil no encontrado")
+            return
+        
+        recent_recipes = user_profile.get("recent_generated_recipes", [])
+        if recipe_index >= len(recent_recipes):
+            bot.answer_callback_query(call.id, "❌ Receta no encontrada")
+            return
+        
+        selected_recipe = recent_recipes[-(recipe_index + 1)]  # Orden inverso
+        
+        # Crear teclado de valoración
+        keyboard = types.InlineKeyboardMarkup(row_width=5)
+        
+        # Botones de estrellas
+        star_buttons = []
+        for rating in range(1, 6):
+            stars = "⭐" * rating
+            star_buttons.append(
+                types.InlineKeyboardButton(stars, callback_data=f"rating_{recipe_index}_{rating}")
+            )
+        keyboard.add(*star_buttons)
+        
+        # Mostrar receta para valorar
+        recipe_name = selected_recipe.get("nombre", "Receta sin nombre")
+        macros = selected_recipe.get("macros_por_porcion", {})
+        ingredients = selected_recipe.get("ingredientes", [])
+        
+        rating_text = f"""
+⭐ **VALORAR RECETA ESPECÍFICA**
+
+📋 **Receta:** {recipe_name}
+🎯 **Timing:** {selected_recipe.get("categoria_timing", "general").replace("_", " ").title()}
+🔥 **Calorías:** {macros.get("calorias", 0)} kcal
+🥩 **Macros:** {macros.get("proteinas", 0)}P • {macros.get("carbohidratos", 0)}C • {macros.get("grasas", 0)}F
+
+🛒 **Ingredientes principales:**
+"""
+        
+        # Mostrar hasta 5 ingredientes principales
+        for ingredient in ingredients[:5]:
+            name = ingredient.get("nombre", "")
+            quantity = ingredient.get("cantidad", 0)
+            unit = ingredient.get("unidad", "")
+            rating_text += f"• {name} ({quantity}{unit})\n"
+        
+        if len(ingredients) > 5:
+            rating_text += f"• ... y {len(ingredients) - 5} ingredientes más\n"
+        
+        rating_text += f"""
+
+💭 **¿Cómo valorarías esta receta?**
+
+⭐ = Muy mala • ⭐⭐ = Mala • ⭐⭐⭐ = Regular • ⭐⭐⭐⭐ = Buena • ⭐⭐⭐⭐⭐ = Excelente
+
+**Tu valoración ayuda a la IA a aprender tus preferencias automáticamente.**
+"""
+        
+        bot.send_message(
+            call.message.chat.id,
+            rating_text,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        
+        bot.answer_callback_query(call.id, f"✅ Seleccionada: {recipe_name[:20]}...")
+        
+    except Exception as e:
+        logger.error(f"Error in rate recipe callback: {e}")
+        bot.answer_callback_query(call.id, "❌ Error procesando selección")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('rating_'))
+def handle_rating_callback(call):
+    """Manejar callbacks de valoración específica"""
+    telegram_id = str(call.from_user.id)
+    
+    try:
+        # Extraer datos: rating_recipeIndex_rating
+        parts = call.data.replace('rating_', '').split('_')
+        recipe_index = int(parts[0])
+        rating = int(parts[1])
+        
+        user_profile = meal_bot.get_user_profile(telegram_id)
+        if not user_profile:
+            bot.answer_callback_query(call.id, "❌ Error: Perfil no encontrado")
+            return
+        
+        recent_recipes = user_profile.get("recent_generated_recipes", [])
+        if recipe_index >= len(recent_recipes):
+            bot.answer_callback_query(call.id, "❌ Receta no encontrada")
+            return
+        
+        selected_recipe = recent_recipes[-(recipe_index + 1)]
+        
+        # Aplicar aprendizaje con la inteligencia de recetas
+        learning_result = meal_bot.recipe_intelligence.learn_from_rating(
+            user_profile, selected_recipe, rating, ""
+        )
+        
+        if learning_result["success"]:
+            # Guardar perfil actualizado
+            meal_bot.save_user_profile(telegram_id, user_profile)
+            
+            # Crear respuesta de confirmación
+            stars = "⭐" * rating
+            recipe_name = selected_recipe.get("nombre", "Receta")
+            intelligence_score = learning_result["intelligence_score"]
+            
+            confirmation_text = f"""
+✅ **VALORACIÓN REGISTRADA**
+
+📋 **Receta:** {recipe_name}
+⭐ **Tu valoración:** {stars} ({rating}/5)
+🧠 **IA Score actualizado:** {intelligence_score}/100
+
+🎯 **APRENDIZAJES DE ESTA VALORACIÓN:**
+"""
+            
+            # Mostrar insights del aprendizaje
+            learning_results = learning_result["learning_results"]
+            
+            if "ingredient_insights" in learning_results:
+                insights = learning_results["ingredient_insights"]
+                if insights.get("ingredients_affected", 0) > 0:
+                    confirmation_text += f"• Ingredientes analizados: {insights['ingredients_affected']}\n"
+            
+            if "method_insights" in learning_results:
+                insights = learning_results["method_insights"]
+                if insights.get("methods_detected"):
+                    methods = ", ".join(insights["methods_detected"])
+                    confirmation_text += f"• Métodos detectados: {methods}\n"
+            
+            # Recomendaciones actualizadas
+            recommendations = learning_result["updated_recommendations"]
+            if recommendations.get("recommended_ingredients"):
+                top_ingredients = recommendations["recommended_ingredients"][:3]
+                confirmation_text += f"• Ingredientes ahora favoritos: {', '.join(top_ingredients)}\n"
+            
+            confirmation_text += f"""
+
+💡 **IMPACTO EN FUTURAS RECOMENDACIONES:**
+• Las recetas similares serán {'priorizadas' if rating >= 4 else 'penalizadas' if rating <= 2 else 'neutras'}
+• Los ingredientes de esta receta {'suben' if rating >= 4 else 'bajan' if rating <= 2 else 'mantienen'} su puntuación
+• El sistema aprende automáticamente de tu feedback
+
+🚀 **PRÓXIMOS PASOS:**
+• Genera más recetas con `/generar` para ver mejoras
+• Crea plan semanal con `/nueva_semana` más personalizado
+• Ve tu reporte completo con el botón de abajo
+"""
+            
+            # Crear botón para ver reporte completo
+            keyboard = types.InlineKeyboardMarkup(row_width=1)
+            keyboard.add(
+                types.InlineKeyboardButton("🧠 Ver Reporte Completo IA", callback_data="show_intelligence_report"),
+                types.InlineKeyboardButton("⭐ Valorar Otra Receta", callback_data="back_to_rating")
+            )
+            
+            bot.send_message(
+                call.message.chat.id,
+                confirmation_text,
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+            
+            bot.answer_callback_query(call.id, f"✅ {stars} registrado - IA actualizada!")
+            
+        else:
+            bot.answer_callback_query(call.id, "❌ Error registrando valoración")
+            
+    except Exception as e:
+        logger.error(f"Error in rating callback: {e}")
+        bot.answer_callback_query(call.id, "❌ Error procesando valoración")
+
+@bot.callback_query_handler(func=lambda call: call.data == 'show_intelligence_report')
+def handle_intelligence_report_callback(call):
+    """Mostrar reporte completo de inteligencia"""
+    telegram_id = str(call.from_user.id)
+    
+    try:
+        user_profile = meal_bot.get_user_profile(telegram_id)
+        if not user_profile:
+            bot.answer_callback_query(call.id, "❌ Error: Perfil no encontrado")
+            return
+        
+        intelligence_profile = user_profile.get("recipe_intelligence", {})
+        
+        # Generar reporte completo
+        report = meal_bot.recipe_intelligence.format_intelligence_report_for_telegram(
+            intelligence_profile, user_profile
+        )
+        
+        meal_bot.send_long_message(
+            call.message.chat.id,
+            report,
+            parse_mode='Markdown'
+        )
+        
+        bot.answer_callback_query(call.id, "📊 Reporte de IA generado")
+        
+    except Exception as e:
+        logger.error(f"Error showing intelligence report: {e}")
+        bot.answer_callback_query(call.id, "❌ Error generando reporte")
+
+@bot.callback_query_handler(func=lambda call: call.data == 'back_to_rating')
+def handle_back_to_rating_callback(call):
+    """Volver a la pantalla de valoración"""
+    telegram_id = str(call.from_user.id)
+    
+    # Simular comando valorar_receta
+    class MockMessage:
+        def __init__(self, chat_id, from_user_id):
+            self.chat = type('obj', (object,), {'id': chat_id})
+            self.from_user = type('obj', (object,), {'id': from_user_id})
+            self.text = "/valorar_receta"
+    
+    mock_message = MockMessage(call.message.chat.id, call.from_user.id)
+    valorar_receta_command(mock_message)
+    
+    bot.answer_callback_query(call.id, "🔄 Volviendo a valoraciones...")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('progress_'))
+def handle_progress_callback(call):
+    """Manejar callbacks del sistema de progreso"""
+    telegram_id = str(call.from_user.id)
+    
+    try:
+        action = call.data.replace('progress_', '')
+        user_profile = meal_bot.get_user_profile(telegram_id)
+        
+        if not user_profile:
+            bot.answer_callback_query(call.id, "❌ Error: Perfil no encontrado")
+            return
+        
+        if action in ["report", "week", "month"]:
+            # Generar reporte de progreso
+            period_map = {"report": "month", "week": "week", "month": "month"}
+            period = period_map[action]
+            
+            # Mostrar mensaje de generación
+            processing_msg = bot.send_message(
+                call.message.chat.id,
+                "📊 **Generando reporte de progreso...**\n\n"
+                "📈 Analizando tus métricas\n"
+                "🎯 Calculando tendencias\n"
+                "💡 Generando insights personalizados\n\n"
+                "*Esto puede tomar unos segundos...*",
+                parse_mode='Markdown'
+            )
+            
+            report = meal_bot.progress_tracker.generate_progress_report(user_profile, period)
+            
+            # Eliminar mensaje de procesamiento
+            bot.delete_message(call.message.chat.id, processing_msg.message_id)
+            
+            if report["success"]:
+                formatted_report = meal_bot.progress_tracker.format_progress_report_for_telegram(
+                    report, user_profile
+                )
+                
+                meal_bot.send_long_message(
+                    call.message.chat.id,
+                    formatted_report,
+                    parse_mode='Markdown'
+                )
+                
+                bot.answer_callback_query(call.id, f"📊 Reporte {period} generado")
+            else:
+                bot.send_message(
+                    call.message.chat.id,
+                    f"❌ **Error generando reporte:** {report.get('error', 'Error desconocido')}",
+                    parse_mode='Markdown'
+                )
+                bot.answer_callback_query(call.id, "❌ Error generando reporte")
+        
+        elif action == "record":
+            # Mostrar opciones de métricas para registrar
+            keyboard = types.InlineKeyboardMarkup(row_width=2)
+            
+            # Métricas principales
+            keyboard.add(
+                types.InlineKeyboardButton("⚖️ Peso", callback_data="metric_weight"),
+                types.InlineKeyboardButton("📊 % Grasa", callback_data="metric_body_fat")
+            )
+            keyboard.add(
+                types.InlineKeyboardButton("💪 Masa Muscular", callback_data="metric_muscle_mass"),
+                types.InlineKeyboardButton("📏 Cintura", callback_data="metric_waist_circumference")
+            )
+            keyboard.add(
+                types.InlineKeyboardButton("⚡ Energía", callback_data="metric_energy_level"),
+                types.InlineKeyboardButton("💤 Sueño", callback_data="metric_sleep_quality")
+            )
+            keyboard.add(
+                types.InlineKeyboardButton("🔄 Recuperación", callback_data="metric_recovery_rate"),
+                types.InlineKeyboardButton("🍽️ Apetito", callback_data="metric_appetite")
+            )
+            
+            bot.send_message(
+                call.message.chat.id,
+                "📈 **REGISTRAR MÉTRICA**\n\n"
+                "**Selecciona la métrica que quieres registrar:**\n\n"
+                "⚖️ **Peso** - Peso corporal en kg\n"
+                "📊 **% Grasa** - Porcentaje de grasa corporal\n"
+                "💪 **Masa Muscular** - Masa muscular en kg\n"
+                "📏 **Cintura** - Circunferencia de cintura en cm\n"
+                "⚡ **Energía** - Nivel de energía (1-10)\n"
+                "💤 **Sueño** - Calidad de sueño (1-10)\n"
+                "🔄 **Recuperación** - Recuperación post-entreno (1-10)\n"
+                "🍽️ **Apetito** - Control del apetito (1-10)",
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+            
+            bot.answer_callback_query(call.id, "📈 Selecciona métrica a registrar")
+        
+        elif action == "goals":
+            # Configurar objetivos (funcionalidad futura)
+            bot.send_message(
+                call.message.chat.id,
+                "🎯 **CONFIGURACIÓN DE OBJETIVOS**\n\n"
+                "🚧 Esta funcionalidad estará disponible próximamente.\n\n"
+                "**Por ahora puedes:**\n"
+                "• Registrar métricas regularmente\n"
+                "• Ver reportes de progreso\n"
+                "• Seguir las recomendaciones automáticas\n\n"
+                "El sistema aprende automáticamente de tus datos y ajusta las recomendaciones.",
+                parse_mode='Markdown'
+            )
+            
+            bot.answer_callback_query(call.id, "🚧 Próximamente disponible")
+        
+        elif action == "help":
+            # Ayuda del sistema de progreso
+            help_text = """
+📊 **CÓMO FUNCIONA EL SISTEMA DE PROGRESO**
+
+🎯 **OBJETIVO:**
+Trackear automáticamente tu progreso hacia tus objetivos nutricionales y de fitness.
+
+📈 **PROCESO:**
+1️⃣ **Registras métricas** (peso, energía, etc.)
+2️⃣ **El sistema analiza** tendencias automáticamente
+3️⃣ **Recibes insights** personalizados con IA
+4️⃣ **Se ajusta tu plan** según el progreso
+
+💡 **BENEFICIOS:**
+• **Análisis automático** de tendencias
+• **Detección de patrones** en tu progreso
+• **Recomendaciones adaptativas** según datos
+• **Ajustes automáticos** del Available Energy
+• **Insights personalizados** con IA
+
+📊 **MÉTRICAS DISPONIBLES:**
+⚖️ **Físicas:** Peso, grasa, masa muscular, cintura
+⚡ **Bienestar:** Energía, sueño, recuperación, apetito
+
+🔬 **ANÁLISIS INCLUIDO:**
+• Tendencias semanales/mensuales
+• Comparaciones con objetivos
+• Detección de correlaciones
+• Predicciones de progreso
+
+🚀 **PRÓXIMOS PASOS:**
+• Registra tu primera métrica
+• Usa `/progreso` regularmente
+• Sigue las recomendaciones automáticas
+"""
+            
+            meal_bot.send_long_message(
+                call.message.chat.id,
+                help_text,
+                parse_mode='Markdown'
+            )
+            
+            bot.answer_callback_query(call.id, "ℹ️ Información mostrada")
+        
+    except Exception as e:
+        logger.error(f"Error in progress callback: {e}")
+        bot.answer_callback_query(call.id, "❌ Error procesando acción")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('metric_'))
+def handle_metric_callback(call):
+    """Manejar callbacks de selección de métrica específica"""
+    telegram_id = str(call.from_user.id)
+    
+    try:
+        metric_name = call.data.replace('metric_', '')
+        user_profile = meal_bot.get_user_profile(telegram_id)
+        
+        if not user_profile:
+            bot.answer_callback_query(call.id, "❌ Error: Perfil no encontrado")
+            return
+        
+        # Generar ayuda para entrada de métrica
+        help_text = meal_bot.progress_tracker.get_metric_entry_keyboard(metric_name)
+        
+        # Configurar estado para entrada de métrica
+        meal_bot.user_states[telegram_id] = {
+            "state": "metric_entry",
+            "metric_name": metric_name,
+            "step": "value"
+        }
+        
+        bot.send_message(
+            call.message.chat.id,
+            help_text,
+            parse_mode='Markdown'
+        )
+        
+        metric_config = meal_bot.progress_tracker.trackable_metrics.get(metric_name, {})
+        metric_display_name = metric_config.get("name", "Métrica")
+        
+        bot.answer_callback_query(call.id, f"📝 Registrando {metric_display_name}")
+        
+    except Exception as e:
+        logger.error(f"Error in metric callback: {e}")
+        bot.answer_callback_query(call.id, "❌ Error procesando métrica")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('edit_'))
+def handle_edit_profile_callback(call):
+    """Manejar callbacks de edición de perfil"""
+    telegram_id = str(call.from_user.id)
+    
+    if call.data == "cancel_edit":
+        bot.edit_message_text(
+            "❌ **Edición cancelada**\n\nTus preferencias no han sido modificadas.",
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode='Markdown'
+        )
+        bot.answer_callback_query(call.id, "Edición cancelada")
+        return
+    
+    # Mapear callback a sección de preferencias
+    edit_sections = {
+        "edit_liked_foods": {
+            "section": "liked_foods",
+            "title": "🍽️ ALIMENTOS PREFERIDOS",
+            "step": "9C",
+            "description": "Selecciona los alimentos que más te gustan. Puedes elegir múltiples opciones:"
+        },
+        "edit_disliked_foods": {
+            "section": "disliked_foods", 
+            "title": "🚫 ALIMENTOS A EVITAR",
+            "step": "9D",
+            "description": "Selecciona alimentos que prefieres evitar. Puedes elegir múltiples opciones:"
+        },
+        "edit_cooking_methods": {
+            "section": "cooking_methods",
+            "title": "👨‍🍳 MÉTODOS DE COCCIÓN",
+            "step": "9F", 
+            "description": "Selecciona tus métodos de cocción preferidos. Puedes elegir múltiples opciones:"
+        },
+        "edit_training_schedule": {
+            "section": "training_schedule",
+            "title": "⏰ HORARIO DE ENTRENAMIENTO",
+            "step": "7",
+            "description": "Selecciona tu horario habitual de entrenamiento:"
+        }
+    }
+    
+    section_data = edit_sections.get(call.data)
+    if not section_data:
+        bot.answer_callback_query(call.id, "❌ Opción no válida", show_alert=True)
+        return
+    
+    # Configurar estado de edición
+    meal_bot.user_states[telegram_id] = {
+        "state": "profile_edit",
+        "step": section_data["step"],
+        "edit_section": section_data["section"],
+        "data": {}
+    }
+    
+    bot.answer_callback_query(call.id, f"Editando {section_data['title']}")
+    
+    # Redirigir al paso específico de configuración
+    if section_data["step"] == "9C":
+        handle_edit_liked_foods(call.message, telegram_id)
+    elif section_data["step"] == "9D":
+        handle_edit_disliked_foods(call.message, telegram_id)
+    elif section_data["step"] == "9F":
+        handle_edit_cooking_methods(call.message, telegram_id)
+    elif section_data["step"] == "7":
+        handle_edit_training_schedule(call.message, telegram_id)
+
+def handle_edit_liked_foods(message, telegram_id):
+    """Manejar edición de alimentos preferidos"""
+    # Obtener preferencias actuales
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    current_liked = user_profile.get("preferences", {}).get("liked_foods", [])
+    
+    # Reutilizar lógica del paso 9C del setup inicial
+    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    
+    food_options = [
+        "🥩 Carnes rojas", "🐔 Aves", "🐟 Pescados", "🥚 Huevos",
+        "🥛 Lácteos", "🥜 Frutos secos", "🫘 Legumbres", "🥬 Hojas verdes",
+        "🥦 Crucíferas", "🍅 Solanáceas", "🌿 Aromáticas", "🥕 Raíces",
+        "🌶️ Pimientos", "🥒 Pepináceas", "🫒 Aceitunas", "🥑 Aguacate",
+        "➡️ Continuar"
+    ]
+    
+    buttons = [types.KeyboardButton(option) for option in food_options]
+    markup.add(*buttons)
+    
+    selected_text = f"**Actualmente seleccionados:** {', '.join(current_liked) if current_liked else 'Ninguno'}"
+    
+    bot.edit_message_text(
+        f"🍽️ **EDITANDO ALIMENTOS PREFERIDOS**\n\n"
+        f"Selecciona los alimentos que más te gustan. Puedes elegir múltiples opciones.\n\n"
+        f"{selected_text}\n\n"
+        f"💡 Selecciona una opción o usa **➡️ Continuar** para finalizar.",
+        message.chat.id,
+        message.message_id,
+        parse_mode='Markdown',
+        reply_markup=markup
+    )
+
+def handle_edit_disliked_foods(message, telegram_id):
+    """Manejar edición de alimentos a evitar"""
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    current_disliked = user_profile.get("preferences", {}).get("disliked_foods", [])
+    
+    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    
+    food_options = [
+        "🥩 Carnes rojas", "🐔 Aves", "🐟 Pescados", "🥚 Huevos",
+        "🥛 Lácteos", "🥜 Frutos secos", "🫘 Legumbres", "🥬 Hojas verdes",
+        "🥦 Crucíferas", "🍅 Solanáceas", "🌿 Aromáticas", "🥕 Raíces",
+        "🌶️ Pimientos", "🥒 Pepináceas", "🫒 Aceitunas", "🥑 Aguacate",
+        "➡️ Continuar"
+    ]
+    
+    buttons = [types.KeyboardButton(option) for option in food_options]
+    markup.add(*buttons)
+    
+    selected_text = f"**Actualmente evitados:** {', '.join(current_disliked) if current_disliked else 'Ninguno'}"
+    
+    bot.edit_message_text(
+        f"🚫 **EDITANDO ALIMENTOS A EVITAR**\n\n"
+        f"Selecciona alimentos que prefieres evitar. Puedes elegir múltiples opciones.\n\n"
+        f"{selected_text}\n\n"
+        f"💡 Selecciona una opción o usa **➡️ Continuar** para finalizar.",
+        message.chat.id,
+        message.message_id,
+        parse_mode='Markdown',
+        reply_markup=markup
+    )
+
+def handle_edit_cooking_methods(message, telegram_id):
+    """Manejar edición de métodos de cocción"""
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    current_methods = user_profile.get("preferences", {}).get("cooking_methods", [])
+    
+    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    
+    cooking_options = [
+        "🔥 Horno", "🍳 Sartén", "🥘 Plancha", "🫕 Vapor",
+        "🥗 Crudo/Ensaladas", "🍲 Guisado", "🔥 Parrilla", "🥄 Hervido",
+        "➡️ Continuar"
+    ]
+    
+    buttons = [types.KeyboardButton(option) for option in cooking_options]
+    markup.add(*buttons)
+    
+    selected_text = f"**Actualmente seleccionados:** {', '.join(current_methods) if current_methods else 'Ninguno'}"
+    
+    bot.edit_message_text(
+        f"👨‍🍳 **EDITANDO MÉTODOS DE COCCIÓN**\n\n"
+        f"Selecciona tus métodos de cocción preferidos. Puedes elegir múltiples opciones.\n\n"
+        f"{selected_text}\n\n"
+        f"💡 Selecciona una opción o usa **➡️ Continuar** para finalizar.",
+        message.chat.id,
+        message.message_id,
+        parse_mode='Markdown',
+        reply_markup=markup
+    )
+
+def handle_edit_training_schedule(message, telegram_id):
+    """Manejar edición de horario de entrenamiento"""
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    current_schedule = user_profile.get("exercise_profile", {}).get("training_schedule_desc", "No especificado")
+    
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    
+    schedule_options = [
+        "🌅 Mañana (6:00-12:00)",
+        "☀️ Mediodía (12:00-16:00)", 
+        "🌆 Tarde (16:00-20:00)",
+        "🌙 Noche (20:00-24:00)",
+        "🔄 Variable/Cambia"
+    ]
+    
+    buttons = [types.KeyboardButton(option) for option in schedule_options]
+    markup.add(*buttons)
+    
+    bot.edit_message_text(
+        f"⏰ **EDITANDO HORARIO DE ENTRENAMIENTO**\n\n"
+        f"¿Cuándo sueles entrenar habitualmente?\n\n"
+        f"**Horario actual:** {current_schedule}\n\n"
+        f"Selecciona tu nuevo horario:",
+        message.chat.id,
+        message.message_id,
+        parse_mode='Markdown',
+        reply_markup=markup
+    )
+
+def create_favorite_buttons(telegram_id: str, recipe_id: str) -> types.InlineKeyboardMarkup:
+    """Crear botones de favoritos para una receta"""
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    is_favorite = meal_bot.profile_system.is_recipe_favorite(user_profile, recipe_id)
+    
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    
+    if is_favorite:
+        # Botón para quitar de favoritos
+        markup.add(
+            types.InlineKeyboardButton("🚫 Quitar de favoritos", callback_data=f"fav_remove_{recipe_id}"),
+            types.InlineKeyboardButton("⭐ Ver favoritas", callback_data="fav_view_all")
+        )
+    else:
+        # Botón para añadir a favoritos
+        markup.add(
+            types.InlineKeyboardButton("⭐ Añadir a favoritos", callback_data=f"fav_add_{recipe_id}"),
+            types.InlineKeyboardButton("📚 Ver favoritas", callback_data="fav_view_all")
+        )
+    
+    return markup
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('fav_'))
+def handle_favorite_callback(call):
+    """Manejar callbacks de favoritos"""
+    telegram_id = str(call.from_user.id)
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    if not user_profile:
+        bot.answer_callback_query(call.id, "❌ Configura tu perfil primero", show_alert=True)
+        return
+    
+    if call.data == "fav_view_all":
+        # Mostrar todas las favoritas
+        bot.answer_callback_query(call.id, "📚 Mostrando favoritas...")
+        favoritas_command(call.message)
+        return
+    
+    # Extraer acción y recipe_id
+    parts = call.data.split('_', 2)
+    if len(parts) != 3:
+        bot.answer_callback_query(call.id, "❌ Comando no válido", show_alert=True)
+        return
+    
+    action = parts[1]  # 'add' o 'remove'
+    recipe_id = parts[2]
+    
+    try:
+        if action == "add":
+            # Añadir a favoritos
+            meal_bot.profile_system.add_to_favorites(user_profile, recipe_id)
+            meal_bot.data["users"][telegram_id] = user_profile
+            meal_bot.save_data()
+            
+            bot.answer_callback_query(call.id, "⭐ Añadido a favoritos!", show_alert=False)
+            
+            # Actualizar botones
+            new_markup = create_favorite_buttons(telegram_id, recipe_id)
+            try:
+                bot.edit_message_reply_markup(
+                    call.message.chat.id,
+                    call.message.message_id,
+                    reply_markup=new_markup
+                )
+            except:
+                pass  # Si no se puede editar, continuar
+            
+        elif action == "remove":
+            # Quitar de favoritos
+            meal_bot.profile_system.remove_from_favorites(user_profile, recipe_id)
+            meal_bot.data["users"][telegram_id] = user_profile
+            meal_bot.save_data()
+            
+            bot.answer_callback_query(call.id, "🚫 Quitado de favoritos", show_alert=False)
+            
+            # Actualizar botones
+            new_markup = create_favorite_buttons(telegram_id, recipe_id)
+            try:
+                bot.edit_message_reply_markup(
+                    call.message.chat.id,
+                    call.message.message_id,
+                    reply_markup=new_markup
+                )
+            except:
+                pass  # Si no se puede editar, continuar
+        
+    except Exception as e:
+        bot.answer_callback_query(call.id, f"❌ Error: {str(e)}", show_alert=True)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('gen_'))
 def handle_generation_callback(call):
@@ -646,15 +2663,25 @@ def handle_generation_callback(call):
             "function_category": "sintesis_proteica",
             "target_macros": {"protein": 35, "carbs": 30, "fat": 8, "calories": 320}
         },
-        "gen_comida_principal": {
-            "timing_category": "comida_principal",
+        "gen_desayuno": {
+            "timing_category": "desayuno",
+            "function_category": "equilibrio_nutricional",
+            "target_macros": {"protein": 25, "carbs": 45, "fat": 15, "calories": 380}
+        },
+        "gen_almuerzo": {
+            "timing_category": "almuerzo",
             "function_category": "equilibrio_nutricional",
             "target_macros": {"protein": 40, "carbs": 50, "fat": 20, "calories": 480}
         },
-        "gen_snack": {
-            "timing_category": "snack_complemento",
+        "gen_merienda": {
+            "timing_category": "merienda",
             "function_category": "micronutrientes", 
             "target_macros": {"protein": 15, "carbs": 20, "fat": 12, "calories": 220}
+        },
+        "gen_cena": {
+            "timing_category": "cena",
+            "function_category": "equilibrio_nutricional",
+            "target_macros": {"protein": 35, "carbs": 25, "fat": 18, "calories": 360}
         }
     }
     
@@ -713,7 +2740,12 @@ def handle_generation_callback(call):
 💡 **¿Quieres otra opción?** Usa el comando /generar de nuevo
 """
             
-            meal_bot.send_long_message(call.message.chat.id, success_text, parse_mode='Markdown')
+            # Crear botones de favoritos si la receta se guardó exitosamente
+            markup = None
+            if save_success and recipe_id:
+                markup = create_favorite_buttons(telegram_id, recipe_id)
+            
+            meal_bot.send_long_message(call.message.chat.id, success_text, parse_mode='Markdown', reply_markup=markup)
             
         else:
             error_msg = result.get("error", "Error desconocido")
@@ -736,6 +2768,196 @@ def handle_generation_callback(call):
             "Inténtalo de nuevo en unos momentos.",
             parse_mode='Markdown'
         )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('schedule_'))
+def handle_schedule_callback(call):
+    """Manejar callbacks de selección de cronograma"""
+    telegram_id = str(call.from_user.id)
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    if not user_profile:
+        bot.answer_callback_query(call.id, "❌ Configura tu perfil primero", show_alert=True)
+        return
+    
+    # Extraer el tipo de cronograma seleccionado
+    schedule_type = call.data.replace('schedule_', '')
+    
+    # Verificar que el cronograma existe
+    schedule_data = meal_bot.data['cooking_schedules'].get(schedule_type, {})
+    
+    if not schedule_data:
+        bot.answer_callback_query(call.id, "❌ Cronograma no encontrado", show_alert=True)
+        return
+    
+    # Guardar la selección en el perfil del usuario
+    if 'settings' not in user_profile:
+        user_profile['settings'] = {}
+    user_profile['settings']['cooking_schedule'] = schedule_type
+    meal_bot.save_data()
+    
+    bot.answer_callback_query(call.id, "✅ Cronograma seleccionado")
+    
+    # Mostrar el cronograma seleccionado
+    response_text = f"""
+⏰ **CRONOGRAMA DE COCCIÓN SEMANAL**
+
+🎯 **Tu cronograma:** {schedule_data.get('name', 'Personalizado')}
+📝 **Descripción:** {schedule_data.get('description', 'Cronograma optimizado')}
+⏱️ **Tiempo estimado:** {schedule_data.get('estimated_time', 'Variable')}
+
+**SESIONES PLANIFICADAS:**
+"""
+    
+    sessions = schedule_data.get('sessions', [])
+    for i, session in enumerate(sessions, 1):
+        day = session.get('day', 'día').title()
+        duration = session.get('duration', '2-3 horas')
+        start_time = session.get('start_time', '10:00')
+        tasks = session.get('tasks', [])
+        
+        response_text += f"""
+**SESIÓN {i} - {day}**
+🕐 Horario: {start_time}
+⏰ Duración: {duration}
+📋 Tareas:
+"""
+        for task in tasks:
+            response_text += f"• {task.replace('_', ' ').title()}\n"
+    
+    # Ventajas/desventajas
+    pros = schedule_data.get('pros', [])
+    cons = schedule_data.get('cons', [])
+    
+    if pros:
+        response_text += "\n✅ **VENTAJAS:**\n"
+        for pro in pros:
+            response_text += f"• {pro}\n"
+    
+    if cons:
+        response_text += "\n⚠️ **CONSIDERACIONES:**\n"
+        for con in cons:
+            response_text += f"• {con}\n"
+    
+    response_text += f"""
+
+💡 **OPTIMIZACIÓN SEGÚN TU PERFIL:**
+• Objetivo: {user_profile['basic_data']['objetivo_descripcion']}
+• Available Energy: {user_profile['energy_data']['available_energy']} kcal/kg FFM/día
+• Macros diarios: {user_profile['macros']['calories']} kcal
+
+**Comandos relacionados:**
+• /compras - Lista de compras para este cronograma
+• /menu - Ver distribución nutricional semanal
+• /planificar_semana - Optimización avanzada
+"""
+    
+    bot.edit_message_text(
+        text=response_text,
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        parse_mode='Markdown'
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('select_search_recipe_'))
+def handle_search_recipe_selection_callback(call):
+    """Manejar selección de receta de búsqueda"""
+    telegram_id = str(call.from_user.id)
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    if not user_profile:
+        bot.answer_callback_query(call.id, "❌ Configura tu perfil primero", show_alert=True)
+        return
+    
+    # Verificar estado del usuario
+    user_state = meal_bot.user_states.get(telegram_id, {})
+    if user_state.get("state") != "search_results":
+        bot.answer_callback_query(call.id, "❌ Sesión expirada. Intenta la búsqueda de nuevo.", show_alert=True)
+        return
+    
+    # Extraer índice de la receta seleccionada
+    recipe_index = int(call.data.replace('select_search_recipe_', ''))
+    results = user_state.get("results", [])
+    
+    if recipe_index >= len(results):
+        bot.answer_callback_query(call.id, "❌ Receta no encontrada", show_alert=True)
+        return
+    
+    # Obtener la receta seleccionada
+    selected_result = results[recipe_index]
+    recipe = selected_result.get("adaptacion_propuesta")
+    validation = selected_result.get("validation", {})
+    
+    if not recipe:
+        bot.answer_callback_query(call.id, "❌ Error al obtener la receta", show_alert=True)
+        return
+    
+    bot.answer_callback_query(call.id, f"✅ Receta {recipe_index + 1} seleccionada")
+    
+    # Determinar categoría de timing para guardar la receta
+    timing_category = recipe.get("categoria_timing", "almuerzo")  # Default a almuerzo
+    
+    # Guardar la receta seleccionada
+    success = meal_bot.save_generated_recipe(telegram_id, recipe, timing_category, validation)
+    
+    if success:
+        response_text = f"""
+✅ **RECETA GUARDADA EXITOSAMENTE**
+
+📚 **"{recipe.get('nombre', 'Receta')}"** ha sido añadida a tus recetas.
+
+**¿Qué sigue?**
+• `/recetas` - Ver todas tus recetas guardadas
+• `/valorar_receta` - Valorar para mejorar la IA
+• `/generar` - Crear más recetas específicas
+• `/nueva_semana` - Generar plan completo
+
+💡 **La IA aprende de tus selecciones para futuras recomendaciones.**
+"""
+    else:
+        response_text = """
+❌ **Error al guardar la receta**
+
+Intenta de nuevo o contacta soporte si el problema persiste.
+"""
+    
+    bot.edit_message_text(
+        text=response_text,
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        parse_mode='Markdown'
+    )
+    
+    # Limpiar estado del usuario
+    if telegram_id in meal_bot.user_states:
+        del meal_bot.user_states[telegram_id]
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('more_search_options_'))
+def handle_more_search_options_callback(call):
+    """Manejar solicitud de más opciones de búsqueda"""
+    telegram_id = str(call.from_user.id)
+    query = call.data.replace('more_search_options_', '')
+    
+    bot.answer_callback_query(call.id, "🔄 Buscando más opciones...")
+    
+    # Editar mensaje para mostrar que está procesando
+    bot.edit_message_text(
+        text=f"🤖 **Buscando más opciones para:** '{query}'\n\n"
+             "⏳ Generando nuevas recetas con IA...\n"
+             "📊 Adaptando a tu perfil nutricional...",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        parse_mode='Markdown'
+    )
+    
+    # Crear mensaje simulado para reutilizar la función
+    class MockMessage:
+        def __init__(self, chat_id):
+            self.chat = type('obj', (object,), {'id': chat_id})
+    
+    mock_message = MockMessage(call.message.chat.id)
+    
+    # Llamar a la función de búsqueda
+    process_ai_search(telegram_id, query, mock_message)
 
 @bot.message_handler(commands=['compras'])
 def compras_command(message):
@@ -826,48 +3048,42 @@ def cronograma_command(message):
     # Obtener datos del cronograma
     schedule_data = meal_bot.data['cooking_schedules'].get(cooking_schedule, {})
     
-    # Si no existe el cronograma específico, mostrar cronograma genérico
+    # Si no existe el cronograma específico, mostrar opciones para elegir
     if not schedule_data:
+        # Crear teclado inline para selección de cronograma
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
+        
+        keyboard.add(
+            types.InlineKeyboardButton("🎯 Sesión única (Domingo)", callback_data="schedule_sesion_unica_domingo"),
+            types.InlineKeyboardButton("⚖️ Dos sesiones (Dom + Miér)", callback_data="schedule_dos_sesiones"),
+            types.InlineKeyboardButton("🔄 Tres sesiones (Dom/Mar/Vie)", callback_data="schedule_tres_sesiones"),
+            types.InlineKeyboardButton("📅 Preparación diaria", callback_data="schedule_preparacion_diaria")
+        )
+
         response_text = f"""
-⏰ **CRONOGRAMA DE COCCIÓN SEMANAL**
+⏰ **SELECCIONA TU CRONOGRAMA DE COCCIÓN**
 
-🎯 **Tu cronograma:** Personalizado
-📝 **Descripción:** Cronograma básico de meal prep
-⏱️ **Tiempo estimado:** 2-4 horas
+👤 **Tu perfil:** {user_profile['basic_data']['objetivo_descripcion']}
+⚡ **Available Energy:** {user_profile['energy_data']['available_energy']} kcal/kg FFM/día
 
-**SESIONES RECOMENDADAS:**
+**OPCIONES DISPONIBLES:**
 
-**SESIÓN 1 - Domingo**
-🕐 Horario: 10:00-14:00
-⏰ Duración: 3-4 horas
-📋 Tareas:
-• Preparar proteínas principales
-• Cocinar granos y cereales
-• Procesar verduras
-• Porcionar y almacenar
+🎯 **Sesión única** - Un día, máxima eficiencia (4-6h)
+⚖️ **Dos sesiones** - Balance entre eficiencia y frescura
+🔄 **Tres sesiones** - Máxima frescura distribuida
+📅 **Preparación diaria** - Sin meal prep, siempre fresco
 
-**SESIÓN 2 - Miércoles** (opcional)
-🕐 Horario: 19:00-20:30
-⏰ Duración: 1-2 horas
-📋 Tareas:
-• Refrescar verduras
-• Preparar snacks
-• Revisar porciones
-
-✅ **VENTAJAS:**
-• Flexibilidad total
-• Adaptable a cualquier horario
-• Permite experimentar
-
-💡 **OPTIMIZACIÓN SEGÚN TU PERFIL:**
-• Objetivo: {user_profile['basic_data']['objetivo_descripcion']}
-• Available Energy: {user_profile['energy_data']['available_energy']} kcal/kg FFM/día
-• Macros diarios: {user_profile['macros']['calories']} kcal
+**Selecciona la opción que mejor se adapte a tu Available Energy y horarios:**
 
 **¿Quieres más opciones?**
 Usa /nueva_semana para explorar cronogramas específicos.
 """
-        meal_bot.send_long_message(message.chat.id, response_text, parse_mode='Markdown')
+        bot.send_message(
+            message.chat.id, 
+            response_text, 
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
         return
     
     response_text = f"""
@@ -2197,6 +4413,284 @@ def process_profile_setup(telegram_id: str, message):
             "Por favor, introduce un valor válido."
         )
 
+def process_profile_edit(telegram_id: str, message):
+    """Procesar edición de preferencias del perfil"""
+    user_state = meal_bot.user_states.get(telegram_id, {})
+    step = user_state.get("step")
+    edit_section = user_state.get("edit_section")
+    data = user_state.get("data", {})
+    
+    text = message.text.strip()
+    
+    # Verificar si quiere continuar
+    if "continuar" in text.lower() or text == "➡️ Continuar":
+        # Finalizar edición y guardar cambios
+        save_profile_edit_changes(telegram_id, edit_section, data)
+        return
+    
+    # Procesar según sección de edición
+    if step == "9C" and edit_section == "liked_foods":
+        process_edit_liked_foods(telegram_id, message, data)
+    elif step == "9D" and edit_section == "disliked_foods":
+        process_edit_disliked_foods(telegram_id, message, data)
+    elif step == "9F" and edit_section == "cooking_methods":
+        process_edit_cooking_methods(telegram_id, message, data)
+    elif step == "7" and edit_section == "training_schedule":
+        process_edit_training_schedule(telegram_id, message, data)
+
+def process_edit_liked_foods(telegram_id: str, message, data):
+    """Procesar edición de alimentos preferidos"""
+    text = message.text.strip()
+    
+    # Mapear opciones a IDs
+    food_mapping = {
+        "🥩 Carnes rojas": "carnes_rojas",
+        "🐔 Aves": "aves", 
+        "🐟 Pescados": "pescados",
+        "🥚 Huevos": "huevos",
+        "🥛 Lácteos": "lacteos",
+        "🥜 Frutos secos": "frutos_secos",
+        "🫘 Legumbres": "legumbres",
+        "🥬 Hojas verdes": "hojas_verdes",
+        "🥦 Crucíferas": "cruciferas",
+        "🍅 Solanáceas": "solanaceas",
+        "🌿 Aromáticas": "aromaticas",
+        "🥕 Raíces": "raices",
+        "🌶️ Pimientos": "pimientos",
+        "🥒 Pepináceas": "pepinaceas",
+        "🫒 Aceitunas": "aceitunas",
+        "🥑 Aguacate": "aguacate"
+    }
+    
+    if text in food_mapping:
+        selected = food_mapping[text]
+        
+        # Inicializar lista si no existe
+        if "liked_foods" not in data:
+            data["liked_foods"] = []
+        
+        # Agregar si no está ya incluido
+        if selected not in data["liked_foods"]:
+            data["liked_foods"].append(selected)
+            
+        # Mostrar selección actual
+        selected_names = [name.replace("_", " ").title() for name in data["liked_foods"]]
+        selection_text = ", ".join(selected_names) if selected_names else "Ninguna"
+        
+        bot.send_message(
+            message.chat.id,
+            f"✅ **{selected.replace('_', ' ').title()}** añadido\n\n"
+            f"**Seleccionados:** {selection_text}\n\n"
+            "Puedes seleccionar más opciones o usar **➡️ Continuar** para finalizar.",
+            parse_mode='Markdown'
+        )
+        
+        # Actualizar estado
+        meal_bot.user_states[telegram_id]["data"] = data
+    else:
+        bot.send_message(
+            message.chat.id,
+            "❌ Opción no válida. Selecciona una de las opciones del teclado o usa **➡️ Continuar**.",
+            parse_mode='Markdown'
+        )
+
+def process_edit_disliked_foods(telegram_id: str, message, data):
+    """Procesar edición de alimentos a evitar"""
+    text = message.text.strip()
+    
+    # Mapear opciones a IDs (mismo mapeo que liked_foods)
+    food_mapping = {
+        "🥩 Carnes rojas": "carnes_rojas",
+        "🐔 Aves": "aves", 
+        "🐟 Pescados": "pescados",
+        "🥚 Huevos": "huevos",
+        "🥛 Lácteos": "lacteos",
+        "🥜 Frutos secos": "frutos_secos",
+        "🫘 Legumbres": "legumbres",
+        "🥬 Hojas verdes": "hojas_verdes",
+        "🥦 Crucíferas": "cruciferas",
+        "🍅 Solanáceas": "solanaceas",
+        "🌿 Aromáticas": "aromaticas",
+        "🥕 Raíces": "raices",
+        "🌶️ Pimientos": "pimientos",
+        "🥒 Pepináceas": "pepinaceas",
+        "🫒 Aceitunas": "aceitunas",
+        "🥑 Aguacate": "aguacate"
+    }
+    
+    if text in food_mapping:
+        selected = food_mapping[text]
+        
+        # Inicializar lista si no existe
+        if "disliked_foods" not in data:
+            data["disliked_foods"] = []
+        
+        # Agregar si no está ya incluido
+        if selected not in data["disliked_foods"]:
+            data["disliked_foods"].append(selected)
+            
+        # Mostrar selección actual
+        selected_names = [name.replace("_", " ").title() for name in data["disliked_foods"]]
+        selection_text = ", ".join(selected_names) if selected_names else "Ninguna"
+        
+        bot.send_message(
+            message.chat.id,
+            f"✅ **{selected.replace('_', ' ').title()}** añadido a evitar\n\n"
+            f"**A evitar:** {selection_text}\n\n"
+            "Puedes seleccionar más opciones o usar **➡️ Continuar** para finalizar.",
+            parse_mode='Markdown'
+        )
+        
+        # Actualizar estado
+        meal_bot.user_states[telegram_id]["data"] = data
+    else:
+        bot.send_message(
+            message.chat.id,
+            "❌ Opción no válida. Selecciona una de las opciones del teclado o usa **➡️ Continuar**.",
+            parse_mode='Markdown'
+        )
+
+def process_edit_cooking_methods(telegram_id: str, message, data):
+    """Procesar edición de métodos de cocción"""
+    text = message.text.strip()
+    
+    # Mapear opciones a IDs
+    cooking_mapping = {
+        "🔥 Horno": "horno",
+        "🍳 Sartén": "sarten",
+        "🥘 Plancha": "plancha",
+        "🫕 Vapor": "vapor",
+        "🥗 Crudo/Ensaladas": "crudo",
+        "🍲 Guisado": "guisado",
+        "🔥 Parrilla": "parrilla",
+        "🥄 Hervido": "hervido"
+    }
+    
+    if text in cooking_mapping:
+        selected = cooking_mapping[text]
+        
+        # Inicializar lista si no existe
+        if "cooking_methods" not in data:
+            data["cooking_methods"] = []
+        
+        # Agregar si no está ya incluido
+        if selected not in data["cooking_methods"]:
+            data["cooking_methods"].append(selected)
+            
+        # Mostrar selección actual
+        selected_names = [name.replace("_", " ").title() for name in data["cooking_methods"]]
+        selection_text = ", ".join(selected_names) if selected_names else "Ninguna"
+        
+        bot.send_message(
+            message.chat.id,
+            f"✅ **{selected.replace('_', ' ').title()}** añadido\n\n"
+            f"**Métodos seleccionados:** {selection_text}\n\n"
+            "Puedes seleccionar más opciones o usar **➡️ Continuar** para finalizar.",
+            parse_mode='Markdown'
+        )
+        
+        # Actualizar estado
+        meal_bot.user_states[telegram_id]["data"] = data
+    else:
+        bot.send_message(
+            message.chat.id,
+            "❌ Opción no válida. Selecciona una de las opciones del teclado o usa **➡️ Continuar**.",
+            parse_mode='Markdown'
+        )
+
+def process_edit_training_schedule(telegram_id: str, message, data):
+    """Procesar edición de horario de entrenamiento"""
+    text = message.text.strip()
+    
+    # Mapear opciones a IDs
+    schedule_mapping = {
+        "🌅 Mañana (6:00-12:00)": {"id": "mañana", "desc": "Mañana (6:00-12:00)"},
+        "☀️ Mediodía (12:00-16:00)": {"id": "mediodia", "desc": "Mediodía (12:00-16:00)"},
+        "🌆 Tarde (16:00-20:00)": {"id": "tarde", "desc": "Tarde (16:00-20:00)"},
+        "🌙 Noche (20:00-24:00)": {"id": "noche", "desc": "Noche (20:00-24:00)"},
+        "🔄 Variable/Cambia": {"id": "variable", "desc": "Variable/Cambia"}
+    }
+    
+    if text in schedule_mapping:
+        selected = schedule_mapping[text]
+        data["training_schedule"] = selected["id"]
+        data["training_schedule_desc"] = selected["desc"]
+        
+        # Guardar inmediatamente
+        save_profile_edit_changes(telegram_id, "training_schedule", data)
+    else:
+        bot.send_message(
+            message.chat.id,
+            "❌ Opción no válida. Selecciona una de las opciones del teclado.",
+            parse_mode='Markdown'
+        )
+
+def save_profile_edit_changes(telegram_id: str, edit_section: str, data):
+    """Guardar cambios de edición en el perfil del usuario"""
+    try:
+        user_profile = meal_bot.get_user_profile(telegram_id)
+        if not user_profile:
+            bot.send_message(
+                telegram_id,
+                "❌ Error: No se pudo encontrar tu perfil."
+            )
+            return
+        
+        # Actualizar según sección editada
+        if edit_section == "liked_foods":
+            user_profile["preferences"]["liked_foods"] = data.get("liked_foods", [])
+            updated_section = "Alimentos preferidos"
+            
+        elif edit_section == "disliked_foods":
+            user_profile["preferences"]["disliked_foods"] = data.get("disliked_foods", [])
+            updated_section = "Alimentos a evitar"
+            
+        elif edit_section == "cooking_methods":
+            user_profile["preferences"]["cooking_methods"] = data.get("cooking_methods", [])
+            updated_section = "Métodos de cocción"
+            
+        elif edit_section == "training_schedule":
+            user_profile["exercise_profile"]["training_schedule"] = data.get("training_schedule", "variable")
+            user_profile["exercise_profile"]["training_schedule_desc"] = data.get("training_schedule_desc", "Variable/Cambia")
+            
+            # Recalcular timing dinámico de comidas
+            objetivo = user_profile["basic_data"]["objetivo"]
+            new_timing = meal_bot.profile_system.get_dynamic_meal_timing(
+                data["training_schedule"], 
+                objetivo
+            )
+            user_profile["exercise_profile"]["dynamic_meal_timing"] = new_timing
+            updated_section = "Horario de entrenamiento"
+        
+        # Guardar cambios en base de datos
+        meal_bot.data["users"][telegram_id] = user_profile
+        meal_bot.save_data()
+        
+        # Limpiar estado de edición
+        meal_bot.user_states[telegram_id] = {}
+        
+        # Confirmar cambios
+        bot.send_message(
+            telegram_id,
+            f"✅ **¡{updated_section} actualizado exitosamente!**\n\n"
+            f"Tus preferencias han sido guardadas y se aplicarán en:\n"
+            f"• Generación de recetas con IA\n"
+            f"• Menús personalizados\n"
+            f"• Complementos recomendados\n\n"
+            f"💡 Usa `/mis_macros` para ver tu perfil actualizado.",
+            parse_mode='Markdown',
+            reply_markup=meal_bot.create_main_menu_keyboard()
+        )
+        
+    except Exception as e:
+        bot.send_message(
+            telegram_id,
+            f"❌ Error al guardar cambios: {str(e)}\n\n"
+            f"Por favor, intenta de nuevo."
+        )
+        # Limpiar estado en caso de error
+        meal_bot.user_states[telegram_id] = {}
+
 def process_ai_search(telegram_id: str, query: str, message):
     """Procesar búsqueda con IA completamente funcional"""
     
@@ -2274,19 +4768,45 @@ def process_ai_search(telegram_id: str, query: str, message):
                         parse_mode='Markdown'
                     )
             
+            # Crear botones para seleccionar recetas
+            keyboard = types.InlineKeyboardMarkup(row_width=3)
+            
+            # Botones para cada receta encontrada
+            recipe_buttons = []
+            for i in range(len(results[:3])):
+                recipe_buttons.append(
+                    types.InlineKeyboardButton(f"✅ Receta {i+1}", callback_data=f"select_search_recipe_{i}")
+                )
+            
+            keyboard.add(*recipe_buttons)
+            keyboard.add(
+                types.InlineKeyboardButton("🔄 Más opciones", callback_data=f"more_search_options_{query}"),
+                types.InlineKeyboardButton("🗓️ Menú completo", callback_data="theme_auto")
+            )
+            
+            # Guardar resultados en el estado del usuario para poder seleccionarlos
+            meal_bot.user_states[telegram_id] = {
+                "state": "search_results",
+                "query": query,
+                "results": results[:3],
+                "step": "selection"
+            }
+            
             # Opciones de seguimiento
             followup_text = f"""
-🎯 **PRÓXIMOS PASOS:**
+🎯 **SELECCIONA UNA RECETA:**
 
-• **¿Te gusta alguna receta?** Responde con el número (1, 2, 3)
-• **¿Quieres más opciones?** Envía `/buscar {query} más opciones`
-• **¿Modificar algo?** Escribe qué cambiar
-• **¿Generar menú completo?** Usa `/nueva_semana`
+Puedes elegir cualquiera de las recetas mostradas arriba o buscar más opciones.
 
-💡 **Tip:** Todas las recetas están validadas con ingredientes naturales y ajustadas a tus macros.
+💡 **Tip:** Todas las recetas están validadas con ingredientes naturales y ajustadas a tus macros objetivo.
 """
             
-            meal_bot.send_long_message(message.chat.id, followup_text, parse_mode='Markdown')
+            bot.send_message(
+                message.chat.id, 
+                followup_text, 
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
             
         else:
             # Error en la generación
@@ -2326,26 +4846,69 @@ def handle_text_messages(message):
     
     if user_state.get("state") == "profile_setup":
         process_profile_setup(telegram_id, message)
+    elif user_state.get("state") == "profile_edit":
+        process_profile_edit(telegram_id, message)
     elif user_state.get("state") == "schedule_setup":
         process_schedule_setup(telegram_id, message)
+    elif user_state.get("state") == "shopping_list_setup":
+        process_shopping_list_setup(telegram_id, message)
     elif user_state.get("state") == "ai_search":
         # Búsqueda ya procesada
         pass
+    elif user_state.get("state") == "metric_entry":
+        process_metric_entry(telegram_id, message)
     else:
-        # Mensaje libre - responder con ayuda
-        bot.send_message(
-            message.chat.id,
-            "❓ **COMANDOS DISPONIBLES:**\n\n"
-            "/perfil - Configurar perfil nutricional\n"
-            "/mis_macros - Ver tus macros\n"
-            "/menu - Menú semanal\n"
-            "/recetas - Explorar recetas\n"
-            "/complementos - Ver complementos\n"
-            "/buscar [consulta] - Buscar recetas con IA\n"
-            "/generar - Generar receta específica\n"
-            "/nueva_semana - Configurar cronograma\n\n"
-            "💡 **Tip:** Empieza configurando tu perfil con /perfil"
-        )
+        # Mensaje libre - responder con ayuda personalizada
+        user_profile = meal_bot.get_user_profile(telegram_id)
+        
+        if user_profile:
+            # Usuario con perfil - mostrar comandos personalizados
+            preferences = user_profile.get("preferences", {})
+            liked_count = len(preferences.get("liked_foods", []))
+            disliked_count = len(preferences.get("disliked_foods", []))
+            
+            help_text = f"""
+✨ **COMANDOS PERSONALIZADOS PARA TI**
+
+👤 **Tu perfil:** {user_profile['basic_data']['objetivo_descripcion']}
+🎯 **Personalización activa:** {liked_count} preferencias, {disliked_count} exclusiones
+
+**COMANDOS PRINCIPALES:**
+✅ /mis_macros - Ver tus macros personalizados
+✅ /menu - Menú semanal adaptado a tus preferencias  
+✅ /complementos - Complementos filtrados para ti
+✅ /favoritas - Ver tus recetas guardadas
+✅ /lista_compras - Lista optimizada para tu perfil
+
+**GENERACIÓN IA:**
+🤖 /generar - Recetas específicas para tu objetivo
+🔍 /buscar [consulta] - Buscar con IA personalizada
+
+**CONFIGURACIÓN:**
+⚙️ /editar_perfil - Modificar preferencias
+📅 /nueva_semana - Configurar cronograma
+
+💡 **Todo se adapta automáticamente a tu perfil nutricional**
+"""
+        else:
+            # Usuario sin perfil
+            help_text = """
+❓ **COMANDOS DISPONIBLES:**
+
+⚠️ **Primero configura tu perfil para personalización completa:**
+🆕 /perfil - Configurar perfil nutricional
+
+**COMANDOS BÁSICOS:**
+/menu - Menú semanal genérico
+/recetas - Explorar recetas
+/complementos - Ver complementos
+/buscar [consulta] - Buscar recetas con IA
+/generar - Generar receta específica
+
+💡 **¡Configura tu perfil para experiencia 100% personalizada!**
+"""
+        
+        bot.send_message(message.chat.id, help_text, parse_mode='Markdown')
 
 def process_schedule_setup(telegram_id: str, message):
     """Procesar configuración de cronograma"""
@@ -2389,6 +4952,261 @@ def process_schedule_setup(telegram_id: str, message):
             "❌ **Opción no válida**\n\n"
             "Por favor responde con A, B, C o D según tu preferencia."
         )
+
+def process_shopping_list_setup(telegram_id: str, message):
+    """Procesar configuración de lista de compras"""
+    user_state = meal_bot.user_states.get(telegram_id, {})
+    choice = message.text.upper().strip()
+    
+    days_mapping = {
+        "A": 3,
+        "B": 5,
+        "C": 7,
+        "D": 10
+    }
+    
+    if choice in days_mapping:
+        days = days_mapping[choice]
+        
+        # Mostrar mensaje de procesamiento
+        bot.send_message(
+            message.chat.id,
+            f"🛒 **Generando lista de compras para {days} días...**\n\n"
+            "⏳ Calculando cantidades según tus macros...\n"
+            "🥘 Aplicando preferencias alimentarias...\n"
+            "🌊 Añadiendo complementos mediterráneos...\n"
+            "📦 Optimizando para meal prep...",
+            parse_mode='Markdown'
+        )
+        
+        try:
+            # Obtener perfil del usuario
+            user_profile = meal_bot.get_user_profile(telegram_id)
+            
+            # Generar lista de compras
+            shopping_result = meal_bot.shopping_generator.generate_shopping_list(user_profile, days)
+            
+            if shopping_result["success"]:
+                # Formatear y enviar lista
+                shopping_text = meal_bot.shopping_generator.format_shopping_list_for_telegram(
+                    shopping_result, user_profile
+                )
+                
+                meal_bot.send_long_message(message.chat.id, shopping_text, parse_mode='Markdown')
+                
+                # Mensaje de confirmación
+                confirmation_text = f"""
+✅ **LISTA GENERADA EXITOSAMENTE**
+
+🛒 Lista optimizada para {days} días de meal prep
+📊 {shopping_result['metadata']['daily_calories']} kcal diarios
+✨ Adaptada a tus preferencias alimentarias
+
+💡 **PRÓXIMOS PASOS:**
+• Guarda esta lista en tu móvil
+• Ve al supermercado con la lista
+• Sigue los consejos de meal prep
+• Usa `/menu` para ver tu menú semanal
+• Genera recetas específicas con `/generar`
+
+**¡Lista personalizada 100% para tu perfil!**
+"""
+                
+                bot.send_message(message.chat.id, confirmation_text, parse_mode='Markdown')
+                
+            else:
+                bot.send_message(
+                    message.chat.id,
+                    f"❌ **Error generando lista:**\n{shopping_result.get('error', 'Error desconocido')}\n\n"
+                    "💡 **Intenta:**\n"
+                    "• Usar `/lista_compras` de nuevo\n"
+                    "• Verificar que tu perfil esté completo\n"
+                    "• Contactar soporte si persiste el error",
+                    parse_mode='Markdown'
+                )
+        
+        except Exception as e:
+            bot.send_message(
+                message.chat.id,
+                f"❌ **Error procesando solicitud:**\n{str(e)}\n\n"
+                "💡 Intenta usar `/lista_compras` de nuevo",
+                parse_mode='Markdown'
+            )
+        
+        # Limpiar estado del usuario
+        meal_bot.user_states[telegram_id] = {}
+        
+    else:
+        bot.send_message(
+            message.chat.id,
+            "❌ **Opción no válida**\n\n"
+            "Por favor responde con A, B, C o D según la duración deseada."
+        )
+
+def process_metric_entry(telegram_id: str, message):
+    """Procesar entrada de métricas del usuario"""
+    user_state = meal_bot.user_states.get(telegram_id, {})
+    metric_name = user_state.get("metric_name")
+    step = user_state.get("step", "value")
+    
+    if not metric_name:
+        bot.send_message(message.chat.id, "❌ Error: No se encontró la métrica a registrar")
+        meal_bot.user_states[telegram_id] = {}
+        return
+    
+    if step == "value":
+        try:
+            # Extraer valor numérico del mensaje
+            text = message.text.strip()
+            
+            # Separar valor de notas opcionales
+            parts = text.split(' ', 1)
+            value_str = parts[0]
+            notes = parts[1] if len(parts) > 1 else ""
+            
+            # Convertir a float
+            try:
+                value = float(value_str.replace(',', '.'))
+            except ValueError:
+                raise ValueError("Valor no numérico válido")
+            
+            # Obtener configuración de la métrica
+            metric_config = meal_bot.progress_tracker.trackable_metrics.get(metric_name, {})
+            min_val = metric_config.get("min_value", 0)
+            max_val = metric_config.get("max_value", 100)
+            
+            # Validar rango
+            if not (min_val <= value <= max_val):
+                bot.send_message(
+                    message.chat.id,
+                    f"❌ **Valor fuera de rango**\n\n"
+                    f"📊 **{metric_config.get('name', 'Métrica')}** debe estar entre "
+                    f"{min_val} y {max_val} {metric_config.get('unit', '')}\n\n"
+                    f"💡 Envía un valor válido o usa /progreso para cancelar",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            # Registrar métrica
+            user_profile = meal_bot.get_user_profile(telegram_id)
+            if not user_profile:
+                bot.send_message(message.chat.id, "❌ Error: No se encontró tu perfil")
+                meal_bot.user_states[telegram_id] = {}
+                return
+            
+            # Mostrar mensaje de procesamiento
+            processing_msg = bot.send_message(
+                message.chat.id,
+                f"📊 **Registrando {metric_config.get('name', 'métrica')}...**\n\n"
+                "📈 Guardando datos\n"
+                "🎯 Calculando tendencias\n"
+                "💡 Generando insights\n\n"
+                "*Esto puede tomar unos segundos...*",
+                parse_mode='Markdown'
+            )
+            
+            # Registrar la métrica
+            result = meal_bot.progress_tracker.record_metric(user_profile, metric_name, value, notes)
+            
+            # Eliminar mensaje de procesamiento
+            bot.delete_message(message.chat.id, processing_msg.message_id)
+            
+            if result["success"]:
+                # Guardar perfil actualizado
+                meal_bot.save_user_profile(telegram_id, user_profile)
+                
+                # Formatear respuesta de éxito
+                metric_recorded = result["metric_recorded"]
+                trend_analysis = result["trend_analysis"]
+                insights = result.get("insights", [])
+                
+                success_text = f"""
+✅ **MÉTRICA REGISTRADA EXITOSAMENTE**
+
+📊 **{metric_recorded['name']}:** {metric_recorded['value']}{metric_recorded['unit']}
+📅 **Fecha:** {metric_recorded['date']}
+📈 **Total registros:** {result['total_records']}
+
+🎯 **ANÁLISIS DE TENDENCIA:**
+• **Estado:** {trend_analysis['trend_description']}
+• **Cambio semanal:** {trend_analysis['change_rate']:+.2f}{metric_recorded['unit']}/semana
+• **Datos analizados:** {trend_analysis['data_points']} puntos en {trend_analysis['period_analyzed']}
+"""
+                
+                # Añadir insights si existen
+                if insights:
+                    success_text += "\n💡 **INSIGHTS PERSONALIZADOS:**\n"
+                    for insight in insights:
+                        success_text += f"• {insight}\n"
+                
+                # Añadir próximos pasos
+                success_text += f"""
+
+🚀 **PRÓXIMOS PASOS:**
+• Continúa registrando métricas regularmente
+• Usa `/progreso` para ver reportes completos
+• Las recomendaciones se ajustan automáticamente
+• Tu Available Energy se actualiza con cambios de peso
+
+**¡El sistema aprende continuamente de tus datos!**
+"""
+                
+                meal_bot.send_long_message(
+                    message.chat.id,
+                    success_text,
+                    parse_mode='Markdown'
+                )
+                
+                # Botones de acciones rápidas
+                keyboard = types.InlineKeyboardMarkup(row_width=2)
+                keyboard.add(
+                    types.InlineKeyboardButton("📊 Ver Reporte", callback_data="progress_report"),
+                    types.InlineKeyboardButton("📈 Registrar Otra", callback_data="progress_record")
+                )
+                
+                bot.send_message(
+                    message.chat.id,
+                    "🎯 **¿Qué quieres hacer ahora?**",
+                    parse_mode='Markdown',
+                    reply_markup=keyboard
+                )
+                
+            else:
+                bot.send_message(
+                    message.chat.id,
+                    f"❌ **Error registrando métrica:**\n{result.get('error', 'Error desconocido')}\n\n"
+                    "💡 Intenta de nuevo o usa `/progreso` para volver al menú principal",
+                    parse_mode='Markdown'
+                )
+            
+            # Limpiar estado
+            meal_bot.user_states[telegram_id] = {}
+            
+        except ValueError as e:
+            bot.send_message(
+                message.chat.id,
+                f"❌ **Formato no válido**\n\n"
+                f"📝 **Envía solo el número** (ejemplo: 75.2)\n"
+                f"💡 Opcionalmente puedes añadir notas después del número\n\n"
+                f"**Ejemplos válidos:**\n"
+                f"• `75.2`\n"
+                f"• `75.2 después del entreno`\n"
+                f"• `75,2 por la mañana`\n\n"
+                f"Usa `/progreso` para cancelar",
+                parse_mode='Markdown'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error processing metric entry: {e}")
+            bot.send_message(
+                message.chat.id,
+                f"❌ **Error procesando métrica:**\n{str(e)}\n\n"
+                "💡 Intenta de nuevo o usa `/progreso` para volver al menú",
+                parse_mode='Markdown'
+            )
+            
+            # Limpiar estado en caso de error
+            meal_bot.user_states[telegram_id] = {}
 
 # ========================================
 # CONFIGURACIÓN WEBHOOK/POLLING

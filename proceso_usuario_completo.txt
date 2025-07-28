@@ -1,0 +1,295 @@
+# PROCESO COMPLETO DEL USUARIO - MEAL PREP BOT V2.0
+
+## 🚀 GUÍA COMPLETA: DESDE INICIO HASTA MENÚ SEMANAL COMPLETO
+
+### FASE 1: CONFIGURACIÓN INICIAL (Primeros pasos obligatorios)
+
+**1. INICIO DEL BOT**
+- Usuario envía `/start` o cualquier comando
+- Bot detecta que es usuario nuevo
+- Respuesta: "👋 ¡Bienvenido al Meal Prep Bot V2.0! Para comenzar, necesito configurar tu perfil nutricional personalizado. Usa el comando /perfil para empezar."
+
+**2. CONFIGURACIÓN DEL PERFIL** - `/perfil`
+- **Datos básicos:**
+  - Edad (años)
+  - Peso (kg) 
+  - Altura (cm)
+  - Sexo (Hombre/Mujer)
+  - Nivel de actividad física (1-5)
+  - Objetivo (bajar_peso/subir_masa/recomposicion/mantener)
+
+- **Cálculos automáticos:**
+  - TDEE (Total Daily Energy Expenditure)
+  - Macronutrientes (proteína, carbohidratos, grasas)
+  - Available Energy (kcal/kg FFM/día)
+  - Estado metabólico y recomendaciones
+
+- **Preferencias alimentarias:**
+  - Alimentos que te gustan (carnes_rojas, aves, pescados, huevos, lácteos, frutos_secos, legumbres, crucíferas, aceitunas)
+  - Alimentos que evitas
+  - Métodos de cocción preferidos (horno, sartén, plancha, vapor, crudo)
+
+- **Perfil de ejercicio:**
+  - Horario de entrenamiento (mañana/mediodía/tarde/noche/variable)
+  - Timing nutricional dinámico automático
+
+**RESULTADO:** Perfil completo con macros personalizados y Available Energy calculada.
+
+---
+
+### FASE 2: GENERACIÓN DE CONTENIDO NUTRICIONAL
+
+**3. VER MACROS CALCULADOS** - `/mis_macros`
+- Muestra resumen completo del perfil
+- Calorías diarias objetivo
+- Distribución de macronutrientes
+- Estado de Available Energy con semáforo (🟢/🟡/🔴)
+- Recomendaciones específicas
+
+**4. GENERAR RECETAS ESPECÍFICAS** - `/generar`
+- **Opciones disponibles:**
+  - ⚡ Pre-entreno (energía rápida)
+  - 💪 Post-entreno (recuperación muscular)
+  - 🌅 Desayuno (primera comida del día)
+  - 🍽️ Almuerzo (comida principal del mediodía)
+  - 🥜 Merienda (snack de la tarde)
+  - 🌙 Cena (última comida del día)
+
+- **Proceso:**
+  1. Seleccionar categoría → IA genera receta personalizada
+  2. Validación automática de ingredientes naturales
+  3. Ajuste a macros objetivo específicos
+  4. Receta guardada automáticamente en tu colección
+
+**5. BÚSQUEDA INTELIGENTE** - `/buscar [consulta]`
+- **Ejemplos de uso:**
+  - `/buscar pollo post entreno`
+  - `/buscar legumbres mediterráneas`
+  - `/buscar snack alto proteína`
+  - `/buscar desayuno pre entreno`
+
+- **Proceso:**
+  1. IA busca y adapta recetas según consulta
+  2. Muestra hasta 3 opciones personalizadas
+  3. Botones para seleccionar receta favorita
+  4. Opción "Más opciones" para generar nuevas variantes
+  5. Receta seleccionada se guarda automáticamente
+
+**6. VER RECETAS GUARDADAS** - `/recetas`
+- **Organización por categorías:**
+  - ⚡ PRE-ENTRENO
+  - 💪 POST-ENTRENO
+  - 🌅 DESAYUNO
+  - 🍽️ ALMUERZO
+  - 🥜 MERIENDA
+  - 🌙 CENA
+
+- **Información mostrada:**
+  - Nombre de la receta
+  - Calorías por porción
+  - Score de validación (/100)
+  - Fecha de generación
+  - Máximo 3 recetas por categoría (las más recientes)
+
+---
+
+### FASE 3: PLANIFICACIÓN SEMANAL COMPLETA
+
+**7. GENERAR PLAN SEMANAL INTELIGENTE** - `/nueva_semana`
+
+**OPCIÓN A: SELECCIÓN MANUAL DE TEMA**
+- **Temas disponibles:**
+  - 🌊 Mediterránea - Ingredientes tradicionales mediterráneos
+  - 💪 Alta Proteína - Maximizar síntesis proteica y recuperación
+  - 🌿 Detox Natural - Alimentos depurativos y antioxidantes
+  - ⚡ Energía Sostenida - Balance perfecto para rendimiento
+  - 🌈 Variedad Máxima - Máxima diversidad nutricional
+
+**OPCIÓN B: AUTO-SELECCIÓN IA** (Recomendada)
+- 🎯 Auto-selección IA
+- **Algoritmo inteligente que determina:**
+  - Tema óptimo según objetivo y Available Energy
+  - Cronograma de cocción ideal según capacidad energética
+  - Máximo nivel de variedad automático
+  - Adaptación completa a preferencias alimentarias
+
+**Proceso de generación:**
+1. Análisis del perfil nutricional
+2. Aplicación de algoritmos de variedad
+3. Integración de ingredientes estacionales
+4. Cálculo de métricas de calidad
+5. Generación de menú completo de 7 días
+6. 4 comidas diarias personalizadas
+7. Complementos mediterráneos incluidos
+
+**RESULTADO:** Plan semanal completo con:
+- Menú de 7 días (28 comidas totales)
+- Distribución calórica optimizada por comida
+- Recetas adaptadas a preferencias
+- Complementos mediterráneos personalizados
+- Botones de acción para próximos pasos
+
+---
+
+### FASE 4: HERRAMIENTAS DE APOYO
+
+**8. CRONOGRAMA DE COCCIÓN** - `/cronograma`
+- **Si es primera vez:** Muestra opciones para elegir
+  - 🎯 Sesión única (Domingo) - 4-6h, máxima eficiencia
+  - ⚖️ Dos sesiones (Dom + Miér) - Balance entre eficiencia y frescura
+  - 🔄 Tres sesiones (Dom/Mar/Vie) - Máxima frescura distribuida
+  - 📅 Preparación diaria - Sin meal prep, siempre fresco
+
+- **Después de seleccionar:** Muestra cronograma detallado
+  - Horarios específicos por sesión
+  - Tareas organizadas por día
+  - Ventajas y consideraciones
+  - Optimización según tu Available Energy
+
+**9. LISTA DE COMPRAS** - `/compras`
+- Lista optimizada según tu perfil
+- Cantidades calculadas para cronograma seleccionado
+- Organizadas por categorías (proteínas, carbohidratos, vegetales, complementos)
+- Complementos mediterráneos incluidos
+- Estimación de duración (5 días de meal prep)
+
+**10. MENÚ SEMANAL FORMATEADO** - `/menu`
+- **Estructura de timing nutricional:**
+  - Distribución calórica por comida
+  - Macros objetivo específicos por timing
+  - Recetas recomendadas personalizadas (con indicadores de preferencia ✅⚠️)
+  - Complementos mediterráneos por momento del día
+  - Horarios recomendados según tu horario de entrenamiento
+
+- **Personalización visual:**
+  - Indicadores de preferencia en recetas
+  - Adaptación a horario de entrenamiento
+  - Recomendaciones específicas por objetivo
+  - Comandos sugeridos para próximos pasos
+
+---
+
+### FASE 5: SISTEMA DE APRENDIZAJE IA
+
+**11. VALORAR RECETAS** - `/valorar_receta`
+- **Sistema de aprendizaje automático:**
+  - Selecciona recetas generadas recientemente
+  - Escala de valoración 1-5 estrellas
+  - Comentarios opcionales para feedback específico
+  - IA aprende patrones de preferencias automáticamente
+
+- **Aprendizaje incluye:**
+  - Preferencias por ingredientes específicos
+  - Métodos de cocción favoritos
+  - Patrones de macronutrientes preferidos
+  - Preferencias de timing nutricional
+  - Complejidad de recetas preferida
+
+**12. COMPLEMENTOS MEDITERRÁNEOS** - `/complementos`
+- **Adaptación automática a preferencias:**
+  - Filtrado según alimentos que te gustan/evitas
+  - Organizados por momento del día
+  - Porciones calculadas según tus macros
+  - Indicadores visuales de preferencia (✅⚠️)
+
+---
+
+### FASE 6: ANÁLISIS Y OPTIMIZACIÓN AVANZADA
+
+**13. SEGUIMIENTO DE PROGRESO** - `/progreso`
+- **Sistema completo de métricas:**
+  - Adherencia al plan nutricional
+  - Progreso hacia objetivo corporal
+  - Métricas de Available Energy históricas
+  - Análisis de patrones de comportamiento
+  - Correlaciones entre nutrición y rendimiento
+
+**14. ANÁLISIS NUTRICIONAL PROFUNDO** - `/analisis_nutricional`
+- **Períodos de análisis:** semana/mes/trimestre
+- **Análisis incluye:**
+  - Patrones de macronutrientes
+  - Estado de micronutrientes vs RDA
+  - Adherencia temporal al plan
+  - Optimización de timing nutricional
+  - Correlaciones nutrición-progreso
+  - Scoring nutricional integral
+
+**15. PLANIFICADOR SEMANAL AVANZADO** - `/planificar_semana`
+- **Opciones avanzadas:**
+  - 🚀 Rápido - Eficiencia máxima (1-2h meal prep)
+  - 🌿 Fresco - Prioridad en frescura
+  - ⚡ Simple - Recetas de máximo 3 pasos
+- **Optimización temporal:**
+  - Análisis de disponibilidad de tiempo
+  - Distribución inteligente de carga de trabajo
+  - Resolución automática de conflictos temporales
+  - Scoring de eficiencia personalizado
+
+---
+
+### COMANDOS DE CONFIGURACIÓN Y MANTENIMIENTO
+
+**16. EDITAR PERFIL** - `/editar_perfil`
+- Modificar cualquier aspecto del perfil
+- Recálculo automático de macros
+- Actualización de Available Energy
+- Preserva historial de aprendizaje IA
+
+**17. AYUDA** - `/help`
+- Lista completa de comandos disponibles
+- Explicación de funcionalidades
+- Tips de uso optimizado
+
+---
+
+## 🎯 FLUJO TÍPICO COMPLETO (Semana 1)
+
+**DÍA 1: CONFIGURACIÓN**
+1. `/start` → `/perfil` (15 min configuración completa)
+2. `/mis_macros` (verificar cálculos)
+3. `/generar` (crear 2-3 recetas de prueba)
+
+**DÍA 2: EXPLORACIÓN**
+4. `/buscar desayuno mediterráneo` (encontrar opciones específicas)
+5. `/recetas` (ver colección)
+6. `/valorar_receta` (entrenar la IA)
+
+**DÍA 3: PLANIFICACIÓN**
+7. `/nueva_semana` → "🎯 Auto-selección IA" (generar plan completo)
+8. `/cronograma` → Seleccionar cronograma según Available Energy
+9. `/compras` (generar lista de compras)
+
+**DÍA 4-7: EJECUCIÓN**
+10. `/menu` (consultar distribución diaria)
+11. `/complementos` (verificar snacks del día)
+12. `/progreso` (monitorear adherencia)
+
+**RESULTADO FINAL:**
+- Menú semanal completo (28 comidas)
+- Cronograma de cocción optimizado
+- Lista de compras calculada
+- Sistema de IA aprendiendo preferencias
+- Métricas de progreso siendo tracked
+- Available Energy optimizada para máximo rendimiento
+
+---
+
+## 💡 TIPS DE USO AVANZADO
+
+**PARA MAXIMIZAR EFICIENCIA:**
+- Usa "🎯 Auto-selección IA" en `/nueva_semana` para óptima personalización
+- Valora recetas regularmente para mejorar recomendaciones
+- Revisa `/analisis_nutricional` mensualmente
+- Ajusta cronograma según cambios en Available Energy
+
+**PARA MÁXIMA VARIEDAD:**
+- Usa `/buscar` con términos específicos diferentes cada semana
+- Experimenta con todos los temas semanales disponibles
+- Actualiza preferencias en `/editar_perfil` según evolución de gustos
+
+**PARA ÓPTIMO RENDIMIENTO:**
+- Mantén Available Energy en zona verde (>45 kcal/kg FFM/día)  
+- Sigue timing nutricional recomendado según horario de entrenamiento
+- Usa `/progreso` para correlacionar nutrición con rendimiento
+
+El sistema está diseñado para evolucionar contigo, aprendiendo de tus preferencias y optimizando automáticamente para tu máximo rendimiento y satisfacción nutricional.

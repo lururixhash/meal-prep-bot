@@ -12,22 +12,32 @@ from datetime import datetime, timedelta
 def format_menu_for_telegram(user_profile: Dict) -> str:
     """
     Formatear menú semanal personalizado para Telegram
-    Integra timing nutricional y complementos mediterráneos
+    Integra timing nutricional, preferencias del usuario y complementos mediterráneos
     """
     try:
         # Datos del usuario
         basic_data = user_profile["basic_data"]
         macros = user_profile["macros"]
         energy_data = user_profile["energy_data"]
+        preferences = user_profile.get("preferences", {})
+        exercise_profile = user_profile.get("exercise_profile", {})
         
-        # Encabezado del menú
+        # Formatear preferencias para mostrar
+        liked_foods = preferences.get("liked_foods", [])
+        disliked_foods = preferences.get("disliked_foods", [])
+        
+        # Encabezado del menú con preferencias
         menu_text = f"""
-📅 **MENÚ SEMANAL PERSONALIZADO**
+📅 **MENÚ SEMANAL PERSONALIZADO CON PREFERENCIAS**
 
 👤 **Tu perfil:** {basic_data['objetivo_descripcion']}
 🔥 **Calorías diarias:** {macros['calories']} kcal
 ⚡ **Available Energy:** {energy_data['available_energy']} kcal/kg FFM/día
 🎯 **Estado:** {energy_data['ea_status']['color']} {energy_data['ea_status']['description']}
+⏰ **Entrenamiento:** {exercise_profile.get('training_schedule_desc', 'Variable')}
+
+🍽️ **Priorizando:** {', '.join([f.replace('_', ' ').title() for f in liked_foods[:3]]) if liked_foods else 'Sin preferencias específicas'}
+🚫 **Evitando:** {', '.join([f.replace('_', ' ').title() for f in disliked_foods[:3]]) if disliked_foods else 'Sin restricciones'}
 
 **ESTRUCTURA DE TIMING NUTRICIONAL:**
 
@@ -63,19 +73,21 @@ def format_menu_for_telegram(user_profile: Dict) -> str:
             menu_text += f"🎯 Target: {target_macros['calories']} kcal • "
             menu_text += f"{target_macros['protein']}P • {target_macros['carbs']}C • {target_macros['fat']}F\n"
             
-            # Recetas recomendadas
-            recipes = details.get('recipes', [])
+            # Recetas recomendadas personalizadas
+            recipes = apply_user_preferences_to_recipes(details.get('recipes', []), preferences)
             if recipes:
-                menu_text += "🍽️ **Opciones:**\n"
+                menu_text += "🍽️ **Opciones personalizadas:**\n"
                 for recipe in recipes[:2]:  # Máximo 2 opciones por timing
-                    menu_text += f"  • {recipe['name']} ({recipe['calories']} kcal)\n"
+                    preference_indicator = get_preference_indicator(recipe, preferences)
+                    menu_text += f"  {preference_indicator} {recipe['name']} ({recipe['calories']} kcal)\n"
             
-            # Complementos mediterráneos
-            complements = details.get('complements', [])
+            # Complementos mediterráneos personalizados
+            complements = apply_user_preferences_to_complements(details.get('complements', []), preferences)
             if complements:
                 menu_text += "🥜 **Complementos:**\n"
-                for complement in complements:
-                    menu_text += f"  • {complement['name']} {complement['portion']}\n"
+                for complement in complements[:3]:  # Máximo 3 complementos
+                    preference_indicator = get_complement_preference_indicator(complement, preferences)
+                    menu_text += f"  {preference_indicator} {complement['name']} {complement['portion']}\n"
             
             menu_text += "\n"
         
@@ -89,6 +101,124 @@ def format_menu_for_telegram(user_profile: Dict) -> str:
         
     except Exception as e:
         return f"❌ Error generating menu: {str(e)}"
+
+def apply_user_preferences_to_recipes(recipes: List[Dict], preferences: Dict) -> List[Dict]:
+    """Aplicar preferencias del usuario a las recetas recomendadas"""
+    if not recipes or not preferences:
+        return recipes
+    
+    liked_foods = preferences.get("liked_foods", [])
+    disliked_foods = preferences.get("disliked_foods", [])
+    
+    # Separar recetas en categorías por preferencias
+    preferred_recipes = []
+    neutral_recipes = []
+    avoided_recipes = []
+    
+    for recipe in recipes:
+        recipe_name_lower = recipe.get('name', '').lower()
+        
+        # Verificar si contiene alimentos preferidos
+        has_liked = any(food.replace('_', ' ') in recipe_name_lower for food in liked_foods)
+        has_disliked = any(food.replace('_', ' ') in recipe_name_lower for food in disliked_foods)
+        
+        if has_liked and not has_disliked:
+            preferred_recipes.append(recipe)
+        elif has_disliked:
+            avoided_recipes.append(recipe)
+        else:
+            neutral_recipes.append(recipe)
+    
+    # Priorizar recetas preferidas, luego neutrales, luego evitadas
+    return preferred_recipes + neutral_recipes + avoided_recipes
+
+def apply_user_preferences_to_complements(complements: List[Dict], preferences: Dict) -> List[Dict]:
+    """Aplicar preferencias del usuario a los complementos"""
+    if not complements or not preferences:
+        return complements
+    
+    liked_foods = preferences.get("liked_foods", [])
+    disliked_foods = preferences.get("disliked_foods", [])
+    
+    # Mapeo de complementos a categorías de alimentos
+    complement_mapping = {
+        "almendras": "frutos_secos", "nueces": "frutos_secos", "pistachos": "frutos_secos",
+        "yogur": "lacteos", "queso": "lacteos", "feta": "lacteos",
+        "aceitunas": "aceitunas", "aceite": "aceitunas"
+    }
+    
+    preferred_complements = []
+    neutral_complements = []
+    avoided_complements = []
+    
+    for complement in complements:
+        complement_name_lower = complement.get('name', '').lower()
+        
+        # Verificar mapeo de preferencias
+        is_preferred = False
+        is_disliked = False
+        
+        for word, food_category in complement_mapping.items():
+            if word in complement_name_lower:
+                if food_category in liked_foods:
+                    is_preferred = True
+                if food_category in disliked_foods:
+                    is_disliked = True
+                break
+        
+        if is_preferred and not is_disliked:
+            preferred_complements.append(complement)
+        elif is_disliked:
+            avoided_complements.append(complement)
+        else:
+            neutral_complements.append(complement)
+    
+    return preferred_complements + neutral_complements + avoided_complements
+
+def get_preference_indicator(recipe: Dict, preferences: Dict) -> str:
+    """Obtener indicador visual de preferencia para receta"""
+    if not preferences:
+        return "•"
+    
+    liked_foods = preferences.get("liked_foods", [])
+    disliked_foods = preferences.get("disliked_foods", [])
+    recipe_name_lower = recipe.get('name', '').lower()
+    
+    has_liked = any(food.replace('_', ' ') in recipe_name_lower for food in liked_foods)
+    has_disliked = any(food.replace('_', ' ') in recipe_name_lower for food in disliked_foods)
+    
+    if has_liked and not has_disliked:
+        return "✅"  # Preferida
+    elif has_disliked:
+        return "⚠️"  # A evitar
+    else:
+        return "•"   # Neutral
+
+def get_complement_preference_indicator(complement: Dict, preferences: Dict) -> str:
+    """Obtener indicador visual de preferencia para complemento"""
+    if not preferences:
+        return "•"
+    
+    liked_foods = preferences.get("liked_foods", [])
+    disliked_foods = preferences.get("disliked_foods", [])
+    complement_name_lower = complement.get('name', '').lower()
+    
+    # Mapeo específico para complementos
+    complement_mapping = {
+        "almendras": "frutos_secos", "nueces": "frutos_secos", "pistachos": "frutos_secos",
+        "yogur": "lacteos", "queso": "lacteos", "feta": "lacteos",
+        "aceitunas": "aceitunas", "aceite": "aceitunas"
+    }
+    
+    for word, food_category in complement_mapping.items():
+        if word in complement_name_lower:
+            if food_category in liked_foods:
+                return "✅"  # Preferido
+            elif food_category in disliked_foods:
+                return "⚠️"  # A evitar
+            break
+    
+    return "•"  # Neutral
 
 def generate_daily_timing_structure(user_profile: Dict) -> Dict:
     """
@@ -167,11 +297,13 @@ def calculate_timing_macros(target_calories: float, timing_type: str) -> Dict:
     macro_ratios = {
         "pre_entreno": {"protein": 0.15, "carbs": 0.70, "fat": 0.15},
         "post_entreno": {"protein": 0.35, "carbs": 0.45, "fat": 0.20},
-        "comida_principal": {"protein": 0.25, "carbs": 0.45, "fat": 0.30},
-        "snack_complemento": {"protein": 0.20, "carbs": 0.40, "fat": 0.40}
+        "desayuno": {"protein": 0.20, "carbs": 0.50, "fat": 0.30},
+        "almuerzo": {"protein": 0.25, "carbs": 0.45, "fat": 0.30},
+        "merienda": {"protein": 0.20, "carbs": 0.40, "fat": 0.40},
+        "cena": {"protein": 0.30, "carbs": 0.35, "fat": 0.35}
     }
     
-    ratios = macro_ratios.get(timing_type, macro_ratios["comida_principal"])
+    ratios = macro_ratios.get(timing_type, macro_ratios["almuerzo"])
     
     return {
         "calories": int(target_calories),
@@ -193,9 +325,21 @@ def get_timing_recipes(timing_type: str) -> List[Dict]:
             {"name": "Pollo con quinoa y verduras", "calories": 520},
             {"name": "Salmón con arroz integral", "calories": 480}
         ],
-        "comida_principal": [
+        "desayuno": [
+            {"name": "Tortilla de vegetales mediterránea", "calories": 380},
+            {"name": "Yogur griego con frutos secos", "calories": 350}
+        ],
+        "almuerzo": [
             {"name": "Ternera mediterránea con legumbres", "calories": 580},
             {"name": "Lubina al horno con vegetales", "calories": 450}
+        ],
+        "merienda": [
+            {"name": "Hummus con vegetales", "calories": 220},
+            {"name": "Frutos secos mixtos", "calories": 240}
+        ],
+        "cena": [
+            {"name": "Salmón a la plancha con espárragos", "calories": 360},
+            {"name": "Ensalada griega con queso feta", "calories": 340}
         ]
     }
     
@@ -343,10 +487,16 @@ def generate_daily_summary(user_profile: Dict) -> str:
 
 def generate_personalized_recommendations(user_profile: Dict) -> str:
     """
-    Generar recomendaciones personalizadas
+    Generar recomendaciones personalizadas basadas en objetivo y preferencias
     """
     objective = user_profile["basic_data"]["objetivo"]
     ea_status = user_profile["energy_data"]["ea_status"]["status"]
+    preferences = user_profile.get("preferences", {})
+    exercise_profile = user_profile.get("exercise_profile", {})
+    
+    liked_foods = preferences.get("liked_foods", [])
+    disliked_foods = preferences.get("disliked_foods", [])
+    cooking_methods = preferences.get("cooking_methods", [])
     
     recommendations = f"""
 💡 **RECOMENDACIONES PERSONALIZADAS:**
@@ -386,14 +536,76 @@ def generate_personalized_recommendations(user_profile: Dict) -> str:
     ea_recommendation = user_profile["energy_data"]["ea_status"]["recommendation"]
     recommendations += f"• {ea_recommendation}\n"
     
+    # Recomendaciones basadas en preferencias
+    if liked_foods or disliked_foods or cooking_methods:
+        recommendations += "\n**Adaptado a tus preferencias:**\n"
+        
+        # Recomendaciones por alimentos preferidos
+        if liked_foods:
+            food_recommendations = {
+                "carnes_rojas": "• Incluye carnes rojas magras 2-3x/semana para hierro",
+                "aves": "• Pechuga de pollo como base proteica versátil",
+                "pescados": "• Incorpora pescado azul 2x/semana para omega-3",
+                "huevos": "• Huevos como fuente proteica completa y económica",
+                "lacteos": "• Yogur griego natural como snack post-entreno",
+                "frutos_secos": "• Frutos secos para grasas saludables entre comidas",
+                "legumbres": "• Legumbres como carbohidratos complejos y proteína vegetal",
+                "cruciferas": "• Verduras crucíferas para micronutrientes y fibra",
+                "aceitunas": "• Aceitunas y aceite de oliva como grasa principal"
+            }
+            
+            for food in liked_foods[:3]:  # Máximo 3 recomendaciones
+                if food in food_recommendations:
+                    recommendations += f"{food_recommendations[food]}\n"
+        
+        # Avisos sobre alimentos a evitar
+        if disliked_foods:
+            recommendations += f"• Evitando: {', '.join([f.replace('_', ' ').title() for f in disliked_foods[:2]])} - menú adaptado\n"
+        
+        # Recomendaciones por métodos de cocción
+        if cooking_methods:
+            method_recommendations = {
+                "horno": "• Horno: ideal para meal prep masivo y cocción uniforme",
+                "sarten": "• Sartén: perfecto para proteínas rápidas y salteados",
+                "plancha": "• Plancha: mantiene sabor natural y reduce grasas",
+                "vapor": "• Vapor: preserva máximo los nutrientes de vegetales",
+                "crudo": "• Crudo: maximiza enzimas y vitaminas termolábiles"
+            }
+            
+            for method in cooking_methods[:2]:  # Máximo 2 recomendaciones
+                if method in method_recommendations:
+                    recommendations += f"{method_recommendations[method]}\n"
+    
+    # Recomendaciones por horario de entrenamiento
+    training_schedule = exercise_profile.get("training_schedule", "variable")
+    if training_schedule != "variable":
+        recommendations += f"\n**Para tu horario de entrenamiento ({exercise_profile.get('training_schedule_desc', '')}):**\n"
+        
+        schedule_tips = {
+            "mañana": "• Desayuno ligero pre-entreno, almuerzo abundante post-entreno",
+            "mediodia": "• Almuerzo ligero pre-entreno, merienda sustanciosa post-entreno",
+            "tarde": "• Merienda energética pre-entreno, cena recuperativa post-entreno",
+            "noche": "• Cena ligera pre-entreno, snack post-entreno sin exceso"
+        }
+        
+        if training_schedule in schedule_tips:
+            recommendations += f"{schedule_tips[training_schedule]}\n"
+    
     # Comandos disponibles
     recommendations += f"""
 
 🤖 **PRÓXIMOS PASOS:**
 • `/generar` - Crear recetas específicas por timing
 • `/buscar [plato]` - Encontrar recetas con IA
-• `/complementos` - Ver todos los complementos mediterráneos
+• `/complementos` - Ver complementos personalizados
+• `/editar_perfil` - Modificar tus preferencias
 • `/nueva_semana` - Configurar rotación semanal
+
+✅ **PERSONALIZACIÓN ACTIVA:**
+• Menú adaptado a tus preferencias alimentarias
+• Timing optimizado para tu horario de entrenamiento
+• Recomendaciones específicas para tu objetivo
+• Complementos filtrados según lo que te gusta/evitas
 
 **Tu menú se adapta automáticamente a tu progreso y feedback.**
 """

@@ -223,6 +223,10 @@ class UserProfileSystem:
                 )
             },
             "preferences": profile_data.get("preferences", {}),
+            "favorites": {
+                "recipe_ids": [],
+                "last_updated": datetime.now().isoformat()
+            },
             "settings": {
                 "variety_level": profile_data.get("variety_level", 3),
                 "cooking_schedule": profile_data.get("cooking_schedule", "dos_sesiones"),
@@ -361,6 +365,41 @@ class UserProfileSystem:
         user_profile["last_updated"] = datetime.now().isoformat()
         
         return user_profile
+    
+    def add_to_favorites(self, user_profile: Dict, recipe_id: str) -> Dict:
+        """Añadir receta a favoritos del usuario"""
+        if "favorites" not in user_profile:
+            user_profile["favorites"] = {
+                "recipe_ids": [],
+                "last_updated": datetime.now().isoformat()
+            }
+        
+        # Añadir si no está ya en favoritos
+        if recipe_id not in user_profile["favorites"]["recipe_ids"]:
+            user_profile["favorites"]["recipe_ids"].append(recipe_id)
+            user_profile["favorites"]["last_updated"] = datetime.now().isoformat()
+        
+        return user_profile
+    
+    def remove_from_favorites(self, user_profile: Dict, recipe_id: str) -> Dict:
+        """Remover receta de favoritos del usuario"""
+        if "favorites" in user_profile and recipe_id in user_profile["favorites"]["recipe_ids"]:
+            user_profile["favorites"]["recipe_ids"].remove(recipe_id)
+            user_profile["favorites"]["last_updated"] = datetime.now().isoformat()
+        
+        return user_profile
+    
+    def get_user_favorites(self, user_profile: Dict) -> List[str]:
+        """Obtener lista de IDs de recetas favoritas del usuario"""
+        if "favorites" not in user_profile:
+            return []
+        
+        return user_profile["favorites"]["recipe_ids"]
+    
+    def is_recipe_favorite(self, user_profile: Dict, recipe_id: str) -> bool:
+        """Verificar si una receta es favorita del usuario"""
+        favorites = self.get_user_favorites(user_profile)
+        return recipe_id in favorites
 
 # Ejemplo de uso para testing
 if __name__ == "__main__":
