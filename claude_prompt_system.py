@@ -257,14 +257,36 @@ GENERA UNA SOLA RECETA que cumpla perfectamente con todos estos criterios. La re
         function_category = request_data.get("function_category", "equilibrio_nutricional")
         target_macros = request_data.get("target_macros", {})
         
+        # Detectar si es solicitud de más opciones
+        is_more_request = request_data.get("generation_type") == "more_options"
+        variability_seed = request_data.get("variability_seed", "")
+        
         # Preferencias del usuario
         preferences = user_profile.get("preferences", {})
         liked_foods = preferences.get("liked_foods", [])
         disliked_foods = preferences.get("disliked_foods", [])
         cooking_methods = preferences.get("cooking_methods", [])
 
+        # Texto especial para solicitudes de más opciones
+        more_options_instruction = ""
+        if is_more_request:
+            more_options_instruction = f"""
+🔄 **IMPORTANTE: SOLICITUD DE OPCIONES NUEVAS**
+El usuario ya ha visto recetas anteriores. DEBES generar opciones completamente DIFERENTES y NOVEDOSAS.
+
+OBLIGATORIO para esta solicitud:
+- Usa ingredientes principales que NO hayas usado antes
+- Varía las técnicas de cocción significativamente  
+- Cambia los perfiles de sabor (si antes mediterráneo, ahora asiático, etc.)
+- Usa presentaciones y texturas diferentes
+- Variabilidad ID: {variability_seed}
+
+"""
+
         prompt = f"""
 ERES UN EXPERTO EN NUTRICIÓN DEPORTIVA Y MEAL PREP. Tu tarea es generar EXACTAMENTE {num_options} OPCIONES DIFERENTES de recetas que cumplan con estos criterios:
+
+{more_options_instruction}
 
 PERFIL DEL USUARIO:
 - Objetivo: {objective}

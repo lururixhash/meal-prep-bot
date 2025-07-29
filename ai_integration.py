@@ -558,11 +558,17 @@ GENERA UNA NUEVA RECETA que resuelva estos problemas manteniendo todos los demá
                 user_profile, request_data, num_options
             )
             
-            # Verificar cache
-            cache_key = self._generate_cache_key(f"multi_{num_options}_{prompt}")
-            if cache_key in self.recipe_cache:
-                logger.info("📋 Using cached multiple recipes")
-                return self.recipe_cache[cache_key]
+            # Verificar cache (saltear para solicitudes de más opciones)
+            is_more_request = request_data.get("generation_type") == "more_options"
+            
+            if not is_more_request:
+                cache_key = self._generate_cache_key(f"multi_{num_options}_{prompt}")
+                if cache_key in self.recipe_cache:
+                    logger.info("📋 Using cached multiple recipes")
+                    return self.recipe_cache[cache_key]
+            else:
+                logger.info("🔄 Skipping cache for 'more options' request")
+                cache_key = None
             
             # Llamada a Claude API
             logger.info(f"🤖 Generating {num_options} recipe options with Claude API...")
@@ -644,8 +650,11 @@ GENERA UNA NUEVA RECETA que resuelva estos problemas manteniendo todos los demá
                 }
             }
             
-            # Guardar en cache si es exitoso
-            self._cache_result(cache_key, result)
+            # Guardar en cache si es exitoso (solo para solicitudes normales, no "más opciones")
+            if cache_key is not None:
+                self._cache_result(cache_key, result)
+            else:
+                logger.info("🔄 Not caching 'more options' result")
             
             logger.info(f"✅ Generated {len(validated_options)} valid recipe options successfully")
             return result
