@@ -330,8 +330,15 @@ def get_user_timing_recipes(user_profile: Dict, meal_category: str, timing_type:
     # Obtener recetas recientes del usuario
     recent_recipes = user_profile.get("recent_generated_recipes", [])
     for recipe_data in recent_recipes:
-        recipe = recipe_data.get("recipe", {})
-        recipe_timing = recipe.get("categoria_timing", "comida_principal")
+        # Manejar tanto estructura nueva como antigua
+        if isinstance(recipe_data, dict) and "recipe" in recipe_data:
+            # Nueva estructura: {"recipe": {...}, "timing_category": "...", ...}
+            recipe = recipe_data.get("recipe", {})
+            recipe_timing = recipe_data.get("timing_category", recipe.get("categoria_timing", "comida_principal"))
+        else:
+            # Estructura antigua: receta directamente
+            recipe = recipe_data
+            recipe_timing = recipe.get("categoria_timing", "comida_principal")
         
         # Mapear timing a categorías
         matches_timing = False

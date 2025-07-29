@@ -159,10 +159,16 @@ class MealPrepBotV2:
             
             # Agregar receta con ID único para valoración
             recipe_for_rating = recipe.copy()
-            recipe_for_rating["recipe_id"] = recipe_entry["id"]
+            recipe_for_rating["recipe_id"] = recipe_entry["id"] 
             recipe_for_rating["generated_at"] = recipe_entry["generated_date"]
+            recipe_for_rating["categoria_timing"] = timing_category  # ¡CRÍTICO: Agregar timing category!
             
-            user_profile["recent_generated_recipes"].append(recipe_for_rating)
+            user_profile["recent_generated_recipes"].append({
+                "recipe": recipe_for_rating,
+                "timing_category": timing_category,
+                "validation": validation,
+                "generated_date": recipe_entry["generated_date"]
+            })
             
             # Mantener solo las últimas 10 recetas para valoración
             if len(user_profile["recent_generated_recipes"]) > 10:
