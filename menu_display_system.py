@@ -76,10 +76,19 @@ def format_menu_for_telegram(user_profile: Dict) -> str:
             # Recetas recomendadas personalizadas
             recipes = apply_user_preferences_to_recipes(details.get('recipes', []), preferences)
             if recipes:
-                menu_text += "🍽️ **Opciones personalizadas:**\n"
+                # Determinar si son recetas del usuario o ejemplos
+                has_user_recipes = any(recipe.get('source') in ['user_generated', 'user_temp'] for recipe in recipes)
+                section_title = "🍽️ **Tus recetas personalizadas:**" if has_user_recipes else "🍽️ **Opciones recomendadas:**"
+                menu_text += f"{section_title}\n"
+                
                 for recipe in recipes[:2]:  # Máximo 2 opciones por timing
                     preference_indicator = get_preference_indicator(recipe, preferences)
-                    menu_text += f"  {preference_indicator} {recipe['name']} ({recipe['calories']} kcal)\n"
+                    source_indicator = ""
+                    if recipe.get('source') == 'user_generated':
+                        source_indicator = "👨‍🍳 "  # Chef icon for user recipes
+                    elif recipe.get('source') == 'user_temp':
+                        source_indicator = "⏰ "  # Clock icon for temporary recipes
+                    menu_text += f"  {preference_indicator} {source_indicator}{recipe['name']} ({recipe['calories']} kcal)\n"
             
             # Complementos mediterráneos personalizados
             complements = apply_user_preferences_to_complements(details.get('complements', []), preferences)
@@ -282,7 +291,7 @@ def generate_daily_timing_structure(user_profile: Dict) -> Dict:
                 daily_calories * distribution[meal],
                 timing_type
             ),
-            "recipes": get_timing_recipes(timing_type),
+            "recipes": get_user_timing_recipes(user_profile, meal, timing_type),
             "complements": get_timing_complements(meal),
             "timing_type": timing_type
         }
@@ -312,9 +321,58 @@ def calculate_timing_macros(target_calories: float, timing_type: str) -> Dict:
         "fat": int((target_calories * ratios["fat"]) / 9)
     }
 
-def get_timing_recipes(timing_type: str) -> List[Dict]:
+def get_user_timing_recipes(user_profile: Dict, meal_category: str, timing_type: str) -> List[Dict]:
     """
-    Obtener recetas ejemplo para cada timing
+    Obtener recetas reales del usuario para cada timing, con fallback a ejemplos
+    """
+    user_recipes = []
+    
+    # Obtener recetas recientes del usuario
+    recent_recipes = user_profile.get("recent_generated_recipes", [])
+    for recipe_data in recent_recipes:
+        recipe = recipe_data.get("recipe", {})
+        recipe_timing = recipe.get("categoria_timing", "comida_principal")
+        
+        # Mapear timing a categorías
+        matches_timing = False
+        if meal_category == "desayuno" and recipe_timing in ["desayuno", "pre_entreno"]:
+            matches_timing = True
+        elif meal_category == "almuerzo" and recipe_timing in ["almuerzo", "comida_principal", "post_entreno"]:
+            matches_timing = True
+        elif meal_category == "merienda" and recipe_timing in ["merienda", "snack_complemento"]:
+            matches_timing = True
+        elif meal_category == "cena" and recipe_timing in ["cena", "comida_principal"]:
+            matches_timing = True
+        
+        if matches_timing:
+            user_recipes.append({
+                "name": recipe.get("nombre", "Receta sin nombre"),
+                "calories": recipe.get("macros_por_porcion", {}).get("calorias", 0),
+                "source": "user_generated"
+            })
+    
+    # Obtener de opciones temporales también
+    temp_options = user_profile.get("temp_recipe_options", {})
+    if meal_category in temp_options:
+        options = temp_options[meal_category].get("options", [])
+        for option in options:
+            recipe = option.get("recipe", {})
+            user_recipes.append({
+                "name": recipe.get("nombre", "Receta temporal"),
+                "calories": recipe.get("macros_por_porcion", {}).get("calorias", 0),
+                "source": "user_temp"
+            })
+    
+    # Si hay recetas del usuario, devolverlas (máximo 3)
+    if user_recipes:
+        return user_recipes[:3]
+    
+    # Fallback a ejemplos si no hay recetas del usuario
+    return get_timing_recipes_fallback(timing_type)
+
+def get_timing_recipes_fallback(timing_type: str) -> List[Dict]:
+    """
+    Obtener recetas ejemplo para cada timing (fallback)
     """
     recipe_examples = {
         "pre_entreno": [
@@ -340,6 +398,14 @@ def get_timing_recipes(timing_type: str) -> List[Dict]:
         "cena": [
             {"name": "Salmón a la plancha con espárragos", "calories": 360},
             {"name": "Ensalada griega con queso feta", "calories": 340}
+        ],
+        "comida_principal": [
+            {"name": "Pollo mediterráneo con verduras", "calories": 450},
+            {"name": "Pescado al horno con quinoa", "calories": 420}
+        ],
+        "snack_complemento": [
+            {"name": "Yogur con frutos secos", "calories": 200},
+            {"name": "Hummus con vegetales", "calories": 180}
         ]
     }
     
@@ -592,22 +658,39 @@ def generate_personalized_recommendations(user_profile: Dict) -> str:
             recommendations += f"{schedule_tips[training_schedule]}\n"
     
     # Comandos disponibles
+    # Verificar si el usuario tiene recetas generadas
+    has_user_recipes = False
+    recent_recipes = user_profile.get("recent_generated_recipes", [])
+    temp_options = user_profile.get("temp_recipe_options", {})
+    if recent_recipes or temp_options:
+        has_user_recipes = True
+    
+    recipe_generation_tip = ""
+    if not has_user_recipes:
+        recipe_generation_tip = """
+⚠️ **IMPORTANTE:** Actualmente se muestran recetas de ejemplo.
+Para ver TUS recetas personalizadas en el menú:
+• Usa `/generar desayuno`, `/generar almuerzo`, etc.
+• O genera opciones múltiples con `/generar`
+
+"""
+    
     recommendations += f"""
 
 🤖 **PRÓXIMOS PASOS:**
-• `/generar` - Crear recetas específicas por timing
+• `/generar [timing]` - Crear recetas específicas por momento del día
 • `/buscar [plato]` - Encontrar recetas con IA
 • `/complementos` - Ver complementos personalizados
 • `/editar_perfil` - Modificar tus preferencias
-• `/nueva_semana` - Configurar rotación semanal
-
+• `/configurar_menu` - Configurar rotación semanal
+{recipe_generation_tip}
 ✅ **PERSONALIZACIÓN ACTIVA:**
 • Menú adaptado a tus preferencias alimentarias
 • Timing optimizado para tu horario de entrenamiento
 • Recomendaciones específicas para tu objetivo
 • Complementos filtrados según lo que te gusta/evitas
 
-**Tu menú se adapta automáticamente a tu progreso y feedback.**
+**Tu menú se adapta automáticamente conforme generas más recetas.**
 """
     
     return recommendations
