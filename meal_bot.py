@@ -275,6 +275,7 @@ def start_command(message):
 🛒 /lista_compras - Lista optimizada para ti
 ⭐ /favoritas - Tus recetas guardadas
 🤖 /generar - Crear recetas para tu objetivo
+🌟 /valorar - Valorar recetas con 1-5 estrellas
 🌟 /valorar_receta - Entrenar IA con ratings
 
 **CONFIGURACIÓN:**
@@ -571,6 +572,7 @@ def menu_command(message):
 • /generar - Crear recetas por timing
 • /buscar [plato] - Encontrar recetas específicas
 • /nueva_semana - Configurar rotación completa
+• /valorar - Valorar recetas con 1-5 estrellas  
 • /valorar_receta - Entrenar IA con tus preferencias
 """
         
@@ -1286,7 +1288,7 @@ def generate_intelligent_week(message, user_profile: Dict, theme: str):
                 "generated_at": datetime.now().isoformat(),
                 "theme_used": theme
             }
-            meal_bot.save_user_profile(telegram_id, user_profile)
+            meal_bot.database.save_user_profile(telegram_id, user_profile)
             
         else:
             error_message = f"""
@@ -1448,6 +1450,103 @@ def generar_command(message):
         "🥜 **Merienda:** Snack de la tarde - rico en micronutrientes\n"
         "🌙 **Cena:** Última comida del día - ligera y digestiva\n\n"
         "**Cada receta se adaptará automáticamente a tu perfil nutricional y enfoque dietético.**",
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+@bot.message_handler(commands=['valorar'])
+def valorar_command(message):
+    """Valorar recetas específicas con escala 1-5 estrellas"""
+    telegram_id = str(message.from_user.id)
+    
+    if not meal_bot.create_user_if_not_exists(telegram_id, message):
+        return
+    
+    user_profile = meal_bot.get_user_profile(telegram_id)
+    
+    # Verificar si hay recetas recientes generadas
+    recent_recipes = user_profile.get("recent_generated_recipes", [])
+    
+    if not recent_recipes:
+        no_recipes_text = """
+⭐ **SISTEMA DE VALORACIÓN 1-5 ESTRELLAS**
+
+❌ **No hay recetas para valorar**
+
+Para valorar recetas necesitas:
+1. 🤖 Generar recetas con `/generar`
+2. 🔍 Buscar recetas con `/buscar [consulta]`
+3. ✅ Seleccionar recetas de las opciones
+
+💡 **¿Para qué sirven las valoraciones?**
+• Mejorar recomendaciones futuras personalizadas
+• Entrenar la IA con tus preferencias específicas
+• Optimizar el algoritmo según tu feedback
+
+🎯 **Genera algunas recetas primero y luego regresa aquí**
+"""
+        
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(
+            types.InlineKeyboardButton("🤖 Generar Recetas", callback_data="gen_comida_principal")
+        )
+        
+        bot.send_message(
+            message.chat.id,
+            no_recipes_text,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        return
+    
+    # Mostrar recetas disponibles para valorar
+    response_text = """
+⭐ **VALORAR RECETAS - ESCALA 1-5 ESTRELLAS**
+
+📋 **Selecciona la receta que quieres valorar:**
+
+"""
+    
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    
+    # Mostrar últimas 10 recetas
+    for i, recipe_data in enumerate(recent_recipes[-10:], 1):
+        recipe = recipe_data.get("recipe", {})
+        recipe_name = recipe.get("nombre", f"Receta {i}")
+        timing = recipe_data.get("timing_category", "")
+        
+        # Truncar nombre si es muy largo
+        display_name = recipe_name if len(recipe_name) <= 35 else f"{recipe_name[:32]}..."
+        
+        # Agregar emoji según timing
+        timing_emoji = {
+            "desayuno": "🌅",
+            "almuerzo": "🍽️",
+            "merienda": "🥜",
+            "cena": "🌙",
+            "pre_entreno": "⚡",
+            "post_entreno": "💪"
+        }.get(timing, "🍽️")
+        
+        keyboard.add(
+            types.InlineKeyboardButton(
+                f"{timing_emoji} {display_name}",
+                callback_data=f"rate_recipe_{i-1}"
+            )
+        )
+    
+    response_text += f"💫 **{len(recent_recipes[-10:])} recetas disponibles**\n\n"
+    response_text += "🌟 **Escala de valoración:**\n"
+    response_text += "⭐ = No me gustó\n"
+    response_text += "⭐⭐ = Regular\n" 
+    response_text += "⭐⭐⭐ = Buena\n"
+    response_text += "⭐⭐⭐⭐ = Muy buena\n"
+    response_text += "⭐⭐⭐⭐⭐ = Excelente\n\n"
+    response_text += "🤖 **Tus valoraciones ayudan a la IA a generar mejores recomendaciones**"
+    
+    bot.send_message(
+        message.chat.id,
+        response_text,
         parse_mode='Markdown',
         reply_markup=keyboard
     )
@@ -2217,7 +2316,7 @@ def handle_week_actions_callback(call):
             if len(user_profile["saved_weekly_plans"]) > 10:
                 user_profile["saved_weekly_plans"] = user_profile["saved_weekly_plans"][-10:]
             
-            meal_bot.save_user_profile(telegram_id, user_profile)
+            meal_bot.database.save_user_profile(telegram_id, user_profile)
             bot.answer_callback_query(call.id, "⭐ Plan guardado en favoritos")
         
         elif action == "metrics":
@@ -2374,7 +2473,7 @@ def handle_rating_callback(call):
         
         if learning_result["success"]:
             # Guardar perfil actualizado
-            meal_bot.save_user_profile(telegram_id, user_profile)
+            meal_bot.database.save_user_profile(telegram_id, user_profile)
             
             # Crear respuesta de confirmación
             stars = "⭐" * rating
@@ -3189,38 +3288,11 @@ def handle_recipe_selection_callback(call):
         from ai_integration import format_recipe_for_display
         recipe_text = format_recipe_for_display(recipe, validation)
         
-        save_status = "✅ Receta guardada en tu historial" if save_success else "⚠️ Receta no pudo guardarse"
+        # Mensaje de confirmación simple con nombre de la receta
+        recipe_name = recipe.get("nombre", "Receta")
+        confirmation_message = f"✅ {recipe_name} guardada en tu historial"
         
-        # Datos del perfil para personalización
-        timing_display = {
-            "pre_entreno": "⚡ PRE-ENTRENO",
-            "post_entreno": "💪 POST-ENTRENO", 
-            "desayuno": "🌅 DESAYUNO",
-            "almuerzo": "🍽️ ALMUERZO",
-            "merienda": "🥜 MERIENDA",
-            "cena": "🌙 CENA"
-        }.get(timing_category, timing_category.upper())
-        
-        success_text = f"""
-🎉 **RECETA SELECCIONADA - OPCIÓN {option_number}**
-
-{recipe_text}
-
-🤖 **Generada específicamente para tu perfil:**
-• **Momento:** {timing_display}
-• **Objetivo:** {user_profile['basic_data']['objetivo_descripcion']}
-• **Available Energy:** {user_profile['energy_data']['available_energy']} kcal/kg FFM/día
-• **Ingredientes:** 100% naturales y no procesados
-• **Optimizada:** Meal prep y conservación
-
-{save_status}
-
-💡 **Próximos pasos:**
-• `/generar` - Generar más opciones de recetas
-• `/recetas` - Ver todas tus recetas guardadas
-• `/valorar_receta` - Entrena la IA con tu feedback
-• `/menu` - Ver tu menú semanal personalizado
-"""
+        success_text = confirmation_message
         
         # Limpiar opciones temporales después de la selección
         if "temp_recipe_options" in user_profile:
@@ -3231,23 +3303,11 @@ def handle_recipe_selection_callback(call):
             meal_bot.data["users"][telegram_id] = user_profile
             meal_bot.save_data()
         
-        # Crear botones adicionales
-        keyboard = types.InlineKeyboardMarkup(row_width=2)
-        keyboard.add(
-            types.InlineKeyboardButton("🤖 Generar más opciones", callback_data=f"gen_{timing_category}"),
-            types.InlineKeyboardButton("⭐ Valorar esta receta", callback_data="valorar_ultima_receta")
-        )
-        keyboard.add(
-            types.InlineKeyboardButton("📋 Ver mis recetas", callback_data="view_all_recipes"),
-            types.InlineKeyboardButton("📅 Planificar semana", callback_data="theme_auto")
-        )
-        
-        # Enviar confirmación con receta completa
-        meal_bot.send_long_message(
+        # Enviar mensaje de confirmación simple (sin submenú)
+        bot.send_message(
             call.message.chat.id, 
             success_text, 
-            parse_mode='Markdown',
-            reply_markup=keyboard
+            parse_mode='Markdown'
         )
         
         # Sistema de aprendizaje: registrar la selección y rechazos
@@ -3277,7 +3337,7 @@ def handle_recipe_selection_callback(call):
                 
                 # Guardar el perfil actualizado con los aprendizajes
                 if selection_result.get('success'):
-                    meal_bot.save_user_profile(telegram_id, user_profile)
+                    meal_bot.database.save_user_profile(telegram_id, user_profile)
                 
             except Exception as e:
                 logger.error(f"Error registering recipe learning: {e}")
@@ -5602,7 +5662,7 @@ def process_metric_entry(telegram_id: str, message):
             
             if result["success"]:
                 # Guardar perfil actualizado
-                meal_bot.save_user_profile(telegram_id, user_profile)
+                meal_bot.database.save_user_profile(telegram_id, user_profile)
                 
                 # Formatear respuesta de éxito
                 metric_recorded = result["metric_recorded"]
