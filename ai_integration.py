@@ -812,6 +812,25 @@ def format_recipe_for_display(recipe: Dict, validation: Dict) -> str:
         logger.error(f"Error formatting recipe for display: {e}")
         return f"**Error mostrando receta:** {str(e)}"
 
+def escape_markdown_v2(text: str) -> str:
+    """
+    Escapar caracteres especiales para Telegram MarkdownV2
+    """
+    if not text:
+        return ""
+    
+    # Caracteres que necesitan escape en MarkdownV2
+    escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    
+    # Convertir a string si no lo es
+    text = str(text)
+    
+    # Escapar cada carácter especial
+    for char in escape_chars:
+        text = text.replace(char, f'\\{char}')
+    
+    return text
+
 def format_multiple_recipes_for_display(multiple_result: Dict, timing_category: str) -> str:
     """
     Formatear múltiples opciones de recetas para mostrar en Telegram
@@ -838,8 +857,8 @@ def format_multiple_recipes_for_display(multiple_result: Dict, timing_category: 
         
         timing_display = timing_names.get(timing_category, timing_category.replace('_', ' ').title())
         
-        formatted = f"🍽️ **{total_generated} OPCIONES PARA {timing_display}**\n\n"
-        formatted += f"✨ **Selecciona tu favorita:**\n\n"
+        formatted = f"🍽️ *{total_generated} OPCIONES PARA {timing_display}*\n\n"
+        formatted += f"✨ *Selecciona tu favorita:*\n\n"
         
         # Formatear cada opción
         for i, option in enumerate(options, 1):
@@ -852,7 +871,10 @@ def format_multiple_recipes_for_display(multiple_result: Dict, timing_category: 
             difficulty = recipe.get("dificultad", "⭐")
             prep_time = recipe.get("tiempo_prep", 0)
             
-            formatted += f"**{i}. {name}**\n"
+            # Escapar el nombre de la receta
+            safe_name = escape_markdown_v2(name)
+            
+            formatted += f"*{i}\\. {safe_name}*\n"
             formatted += f"🔧 {difficulty} • ⏱️ {prep_time} min"
             
             # Momento sugerido si es diferente al solicitado
@@ -873,17 +895,20 @@ def format_multiple_recipes_for_display(multiple_result: Dict, timing_category: 
             
             # Ingredientes principales (solo los primeros 3)
             ingredients = recipe.get("ingredientes", [])
-            main_ingredients = [ing.get("nombre", "") for ing in ingredients[:3]]
+            main_ingredients = [escape_markdown_v2(ing.get("nombre", "")) for ing in ingredients[:3]]
             if main_ingredients:
-                formatted += f"🛒 {', '.join(main_ingredients)}\n"
+                safe_ingredients = ", ".join(main_ingredients)
+                formatted += f"🛒 {safe_ingredients}\n"
             
             # Técnica principal y perfil de sabor
             technique = recipe.get("tecnica_principal", "")
             flavor_profile = recipe.get("perfil_sabor", "")
             if technique or flavor_profile:
-                formatted += f"👨‍🍳 {technique.title()}"
-                if flavor_profile:
-                    formatted += f" • 🌍 {flavor_profile.title()}"
+                safe_technique = escape_markdown_v2(technique.title()) if technique else ""
+                safe_flavor = escape_markdown_v2(flavor_profile.title()) if flavor_profile else ""
+                formatted += f"👨‍🍳 {safe_technique}"
+                if safe_flavor:
+                    formatted += f" • 🌍 {safe_flavor}"
                 formatted += "\n"
             
             # Score de validación
@@ -895,7 +920,7 @@ def format_multiple_recipes_for_display(multiple_result: Dict, timing_category: 
             formatted += "\n"
         
         # Footer con instrucciones
-        formatted += "🎯 **¿Cómo seleccionar?**\n"
+        formatted += "🎯 *¿Cómo seleccionar?*\n"
         formatted += "• Toca el botón ✅ de tu opción favorita\n"
         formatted += "• Usa 🔄 para generar 5 nuevas opciones\n"
         formatted += "• Todas están optimizadas para meal prep\n\n"
@@ -907,7 +932,19 @@ def format_multiple_recipes_for_display(multiple_result: Dict, timing_category: 
         
     except Exception as e:
         logger.error(f"Error formatting multiple recipes for display: {e}")
-        return f"❌ **Error mostrando opciones:** {str(e)}"
+        # Fallback a formato simple sin markdown si hay error
+        try:
+            options = multiple_result.get("options", [])
+            fallback_text = f"🍽️ {len(options)} OPCIONES DISPONIBLES\n\n"
+            for i, option in enumerate(options, 1):
+                recipe = option.get("recipe", {})
+                name = recipe.get("nombre", f"Opción {i}")
+                calories = recipe.get("macros_por_porcion", {}).get("calorias", 0)
+                fallback_text += f"{i}. {name} ({calories} kcal)\n"
+            fallback_text += "\nToca el botón de la opción que prefieras."
+            return fallback_text
+        except:
+            return f"❌ Error mostrando opciones: {str(e)}"
 
 # Ejemplo de uso
 if __name__ == "__main__":
